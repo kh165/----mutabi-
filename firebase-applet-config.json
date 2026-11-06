@@ -1,12 +1,10 @@
 {
-  "projectId": "compact-torus-kdzmz",
-  "appId": "1:586655492563:web:ac82faeac15e3cd4172726",
-  "apiKey": "AIzaSyDjOjKVxyCDvlNCqNQhA-l4PGa8gyCxwH8",
-  "authDomain": "compact-torus-kdzmz.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-mutabi-d54b46a0-7dff-4f9a-a16b-8479d1c023fe",
-  "storageBucket": "compact-torus-kdzmz.firebasestorage.app",
-  "messagingSenderId": "586655492563",
-  "measurementId": "",
-  "oAuthClientId": "586655492563-snb3j1nhqrhbos26ov9v6kktb2u5k022.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "mutabi-acb51",
+  "appId": "1:610797985015:web:fa93c803c9c8c18e8407f2",
+  "apiKey": "AIzaSyCXpbrbwbLPcScmcADfC4AkilgXzGRkgRc",
+  "authDomain": "mutabi-acb51.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "mutabi-acb51.firebasestorage.app",
+  "messagingSenderId": "610797985015",
+  "measurementId": "G-9TRL672TML"
 }

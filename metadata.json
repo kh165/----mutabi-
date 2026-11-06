@@ -1,0 +1,7 @@
+{
+  "name": "مُتابِع - Mutabi'",
+  "description": "منصّة متابعة الأنشطة اليومية — حفظ القرآن، قراءته، سماع الفيديوهات، وأي نشاط تحدده بنفسك",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

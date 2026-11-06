@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "timezone": { "type": "string", "maxLength": 50 },
+        "theme": { "type": "string", "enum": ["light", "dark", "system"] },
+        "isDisabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastActiveAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["displayName", "email", "isDisabled"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Admin authorization marker document",
+      "type": "object",
+      "properties": {
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Activity definition configured by admins",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 500 },
+        "type": { "type": "string", "enum": ["memorize", "read", "listen", "prayers", "checklist", "custom"] },
+        "inputMode": { "type": "string", "enum": ["numeric", "checkbox", "prayers", "checklist"] },
+        "unit": { "type": "string", "enum": ["ayah", "page", "juz", "minute", "video", "time"] },
+        "dailyTarget": { "type": "number" },
+        "activeDays": { "type": "array" },
+        "icon": { "type": "string", "maxLength": 50 },
+        "color": { "type": "string", "maxLength": 30 },
+        "link": { "type": "string", "maxLength": 500 },
+        "subItems": { "type": "array" },
+        "audience": { "type": "string", "enum": ["all", "selected"] },
+        "assignedUids": { "type": "array" },
+        "order": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "type", "inputMode", "unit", "order", "isActive"]
+    },
+    "ActivityItem": {
+      "title": "ActivityItem",
+      "description": "Video content item under a listening activity",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "youtubeUrl": { "type": "string", "maxLength": 500 },
+        "durationMin": { "type": "number" },
+        "order": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "youtubeUrl", "order"]
+    },
+    "Log": {
+      "title": "Log",
+      "description": "Daily activity log entry for a user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "activityId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "amount": { "type": "number" },
+        "completed": { "type": "boolean" },
+        "details": { "type": "object" },
+        "note": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "activityId", "date", "amount", "completed"]
+    },
+    "ItemProgress": {
+      "title": "ItemProgress",
+      "description": "Record of a video marked as watched by a user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "activityId": { "type": "string", "maxLength": 128 },
+        "itemId": { "type": "string", "maxLength": 128 },
+        "watchedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "activityId", "itemId"]
+    },
+    "AdminNote": {
+      "title": "AdminNote",
+      "description": "Encouragement or note from admin to a user",
+      "type": "object",
+      "properties": {
+        "toUid": { "type": "string", "maxLength": 128 },
+        "fromUid": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "maxLength": 1000 },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["toUid", "fromUid", "text", "isRead"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "Stores user profiles with isolation and admin oversight"
+    },
+    "/admins/{uid}": {
+      "schema": "Admin",
+      "description": "Marker collection where presence of doc grants admin rights"
+    },
+    "/activities/{activityId}": {
+      "schema": "Activity",
+      "description": "Activities created by admins and available to users"
+    },
+    "/activities/{activityId}/items/{itemId}": {
+      "schema": "ActivityItem",
+      "description": "Videos and listening resources for a specific activity"
+    },
+    "/logs/{logId}": {
+      "schema": "Log",
+      "description": "Daily user progress records keyed by {uid}_{activityId}_{YYYY-MM-DD}"
+    },
+    "/itemProgress/{id}": {
+      "schema": "ItemProgress",
+      "description": "Video watch status keyed by {uid}_{itemId}"
+    },
+    "/notes/{noteId}": {
+      "schema": "AdminNote",
+      "description": "Notes and feedback sent by admins to specific users"
+    }
+  }
+}

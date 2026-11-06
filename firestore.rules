@@ -1,0 +1,115 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Global Catch-All Deny ----------
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ---------- Helper Functions ----------
+    function signedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isOwner(uid) { 
+      return signedIn() && request.auth.uid == uid; 
+    }
+    
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    function notDisabled() {
+      return !(exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+               get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isDisabled', false) == true);
+    }
+    
+    function unchanged(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.:]+$');
+    }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid)
+                    && request.resource.data.get('isDisabled', false) == false
+                    && request.resource.data.displayName is string
+                    && request.resource.data.displayName.size() <= 100;
+      allow update: if (isOwner(uid) && unchanged('isDisabled') && unchanged('createdAt')
+                        && request.resource.data.displayName is string
+                        && request.resource.data.displayName.size() <= 100)
+                    || isAdmin();
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // ---------- admins ----------
+    match /admins/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if (isOwner(uid) && request.auth.token.email == 'khalidsalah948@gmail.com') || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------- activities ----------
+    match /activities/{activityId} {
+      allow read: if signedIn() && notDisabled();
+      allow write: if isAdmin();
+
+      match /items/{itemId} {
+        allow read: if signedIn() && notDisabled();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ---------- logs ----------
+    match /logs/{logId} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow list: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if signedIn() && notDisabled()
+                    && request.resource.data.uid == request.auth.uid
+                    && logId == request.auth.uid + '_' + request.resource.data.activityId + '_' + request.resource.data.date
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount >= 0
+                    && request.resource.data.amount <= 100000;
+      allow update: if signedIn() && notDisabled()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount >= 0
+                    && request.resource.data.amount <= 100000;
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    // ---------- itemProgress ----------
+    match /itemProgress/{id} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow list: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if signedIn() && notDisabled()
+                    && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if false;
+    }
+
+    // ---------- notes ----------
+    match /notes/{noteId} {
+      allow read: if signedIn() && (resource.data.toUid == request.auth.uid || isAdmin());
+      allow list: if signedIn() && (resource.data.toUid == request.auth.uid || isAdmin());
+      allow create: if isAdmin();
+      allow update: if (signedIn() && resource.data.toUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']))
+                    || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---------- encouragements (custom admin phrases shown upon achievement) ----------
+    match /encouragements/{quoteId} {
+      allow read: if signedIn();
+      allow list: if signedIn();
+      allow write: if isAdmin();
+    }
+  }
+}

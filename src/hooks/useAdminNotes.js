@@ -5,11 +5,10 @@ import {
   where,
   onSnapshot,
   doc,
-  updateDoc,
   setDoc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase.js';
+} from '../firebase.js';
+import { db, handleDatabaseError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export function useAdminNotes() {
@@ -38,7 +37,7 @@ export function useAdminNotes() {
         setLoading(false);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'notes');
+        handleDatabaseError(error, OperationType.LIST, 'notes');
         setLoading(false);
       }
     );
@@ -48,10 +47,9 @@ export function useAdminNotes() {
 
   const markAsRead = async (noteId) => {
     try {
-      const ref = doc(db, 'notes', noteId);
-      await updateDoc(ref, { isRead: true });
+      await setDoc(doc(db, 'notes', noteId, 'isRead'), true);
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `notes/${noteId}`);
+      handleDatabaseError(err, OperationType.UPDATE, `notes/${noteId}`);
     }
   };
 
@@ -68,7 +66,7 @@ export function useAdminNotes() {
         createdAt: serverTimestamp(),
       });
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'notes');
+      handleDatabaseError(err, OperationType.CREATE, 'notes');
       throw err;
     }
   };

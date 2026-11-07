@@ -78,7 +78,7 @@ export function ReadInput({
       <button
         type="button"
         onClick={() => setQuranReaderOpen(true)}
-        className="w-full py-3 px-4 bg-gradient-to-l from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold text-xs rounded-2xl flex items-center justify-between shadow-sm transition-all"
+        className="w-full py-3 px-4 bg-gradient-to-l from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold text-xs rounded-2xl flex items-center justify-between shadow-sm transition-all cursor-pointer"
       >
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4" />
@@ -108,7 +108,7 @@ export function ReadInput({
         <button
           type="button"
           onClick={() => setEntryMode('count')}
-          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
             entryMode === 'count'
               ? 'bg-sky-600 text-white shadow-2xs'
               : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -119,7 +119,7 @@ export function ReadInput({
         <button
           type="button"
           onClick={() => setEntryMode('range')}
-          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
             entryMode === 'range'
               ? 'bg-sky-600 text-white shadow-2xs'
               : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -138,7 +138,7 @@ export function ReadInput({
             <button
               type="button"
               onClick={() => setPagesCount(Math.max(1, pagesCount - 1))}
-              className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl text-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 flex items-center justify-center transition-all shadow-2xs"
+              className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl text-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 flex items-center justify-center transition-all shadow-2xs cursor-pointer"
             >
               -
             </button>
@@ -153,7 +153,7 @@ export function ReadInput({
             <button
               type="button"
               onClick={() => setPagesCount(pagesCount + 1)}
-              className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl text-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 flex items-center justify-center transition-all shadow-2xs"
+              className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl text-xl font-bold hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 flex items-center justify-center transition-all shadow-2xs cursor-pointer"
             >
               +
             </button>
@@ -199,7 +199,7 @@ export function ReadInput({
             if (entryMode === 'count') setPagesCount(pagesCount + 2);
             else setToPage(toPage + 2);
           }}
-          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-sky-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium"
+          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-sky-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
         >
           +2 صفحة
         </button>
@@ -209,7 +209,7 @@ export function ReadInput({
             if (entryMode === 'count') setPagesCount(pagesCount + 4);
             else setToPage(toPage + 4);
           }}
-          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-sky-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium"
+          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-sky-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
         >
           +4 (ربع حزب)
         </button>
@@ -219,7 +219,7 @@ export function ReadInput({
             if (entryMode === 'count') setPagesCount(pagesCount + 20);
             else setToPage(toPage + 20);
           }}
-          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-sky-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium"
+          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-sky-100 dark:hover:bg-sky-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
         >
           +20 (جزء كامل)
         </button>
@@ -260,7 +260,7 @@ export function ReadInput({
         <button
           type="submit"
           disabled={saving}
-          className="flex-1 py-3 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+          className="flex-1 py-3 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
         >
           <Check className="w-4 h-4" />
           <span>{saving ? 'جارٍ الحفظ...' : 'تسجيل القراءة'}</span>
@@ -279,7 +279,7 @@ export function ReadInput({
                 setSaving(false);
               }
             }}
-            className="py-3 px-3.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+            className="py-3 px-3.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             title="إلغاء تسجيل قراءة اليوم والبدء من جديد"
           >
             <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
@@ -290,7 +290,7 @@ export function ReadInput({
         <button
           type="button"
           onClick={onClose}
-          className="py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition-all"
+          className="py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
         >
           إلغاء
         </button>

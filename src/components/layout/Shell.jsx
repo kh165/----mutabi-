@@ -19,7 +19,6 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { formatArabicDate, getTodayDateString } from '../../lib/dates.js';
-import { checkAndTriggerDueNotifications } from '../../lib/notifications.js';
 import { PWAInstallButton } from './PWAInstallButton.jsx';
 import { Logo } from './Logo.jsx';
 import { QuranReaderModal } from '../QuranReaderModal.jsx';
@@ -31,30 +30,11 @@ export function Shell({
   children,
 }) {
   const { user, userDoc, isAdmin, logout } = useAuth();
-  const { theme, toggleTheme, isDark } = useTheme();
+  const { toggleTheme, isDark } = useTheme();
   const { notes, markAsRead } = useAdminNotes();
   const [notesOpen, setNotesOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [triggeredAlerts, setTriggeredAlerts] = useState({});
   const [quranOpen, setQuranOpen] = useState(false);
-
-  // Background Web Notification Checker (runs every 30 seconds)
-  React.useEffect(() => {
-    if (!userDoc?.notifications?.enabled) return;
-
-    const interval = setInterval(() => {
-      setTriggeredAlerts((prev) =>
-        checkAndTriggerDueNotifications(userDoc.notifications, prev)
-      );
-    }, 30000);
-
-    // Initial immediate check
-    setTriggeredAlerts((prev) =>
-      checkAndTriggerDueNotifications(userDoc.notifications, prev)
-    );
-
-    return () => clearInterval(interval);
-  }, [userDoc?.notifications]);
 
   const unreadNotes = notes.filter((n) => !n.isRead);
   const todayStr = getTodayDateString(userDoc?.timezone);
@@ -118,7 +98,7 @@ export function Shell({
             <button
               type="button"
               onClick={() => setQuranOpen(true)}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 flex items-center justify-center text-emerald-700 dark:text-emerald-300 transition-all border border-emerald-200 dark:border-emerald-800"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 flex items-center justify-center text-emerald-700 dark:text-emerald-300 transition-all border border-emerald-200 dark:border-emerald-800 cursor-pointer"
               title="المصحف الشريف - القراءة والوضع الليلي المريح"
             >
               <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
@@ -128,7 +108,7 @@ export function Shell({
             <button
               type="button"
               onClick={toggleTheme}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all border border-slate-200/60 dark:border-slate-700"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
               title={isDark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
               aria-label="تبديل المظهر"
             >
@@ -144,7 +124,7 @@ export function Shell({
               <button
                 type="button"
                 onClick={() => setNotesOpen(!notesOpen)}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 relative transition-all border border-slate-200/60 dark:border-slate-700"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 relative transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
                 title="ملاحظات المشرف"
               >
                 <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -185,7 +165,7 @@ export function Shell({
                             {!n.isRead && (
                               <button
                                 onClick={() => markAsRead(n.id)}
-                                className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 font-semibold"
+                                className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
                               >
                                 <CheckCircle2 className="w-3 h-3" />
                                 تم الاطلاع
@@ -208,7 +188,7 @@ export function Shell({
               <button
                 type="button"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-1.5 sm:gap-2 p-1 sm:pe-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-all border border-slate-200/60 dark:border-slate-700"
+                className="flex items-center gap-1.5 sm:gap-2 p-1 sm:pe-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
               >
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                   {userDoc?.photoURL ? (
@@ -239,7 +219,7 @@ export function Shell({
                         onSelectTab('profile');
                         setUserMenuOpen(false);
                       }}
-                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl flex items-center gap-2"
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl flex items-center gap-2 cursor-pointer"
                     >
                       <User className="w-3.5 h-3.5 text-slate-400" />
                       الملف الشخصي
@@ -250,7 +230,7 @@ export function Shell({
                           onSelectTab('admin');
                           setUserMenuOpen(false);
                         }}
-                        className="w-full px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl flex items-center gap-2"
+                        className="w-full px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl flex items-center gap-2 cursor-pointer"
                       >
                         <Shield className="w-3.5 h-3.5 text-emerald-600" />
                         لوحة الإدارة
@@ -261,7 +241,7 @@ export function Shell({
                         logout();
                         setUserMenuOpen(false);
                       }}
-                      className="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-2"
+                      className="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-2 cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       تسجيل الخروج
@@ -286,7 +266,7 @@ export function Shell({
                 <button
                   key={item.id}
                   onClick={() => onSelectTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-right ${
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-right cursor-pointer ${
                     active
                       ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shadow-2xs border border-emerald-200/60 dark:border-emerald-800/60'
                       : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
@@ -323,7 +303,7 @@ export function Shell({
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all ${
+              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
                 active
                   ? 'text-emerald-700 dark:text-emerald-400 font-bold scale-105'
                   : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-xs font-medium'

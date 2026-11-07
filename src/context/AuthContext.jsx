@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   onAuthStateChanged,
   signInWithPopup,
@@ -9,6 +9,7 @@ import {
   signOut as fbSignOut,
   setPersistence,
   browserLocalPersistence,
+  updateProfile,
 } from 'firebase/auth';
 import {
   doc,
@@ -16,77 +17,66 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { auth, db, handleFirestoreError, OperationType } from '../firebase';
+} from '../firebase.js';
+import { auth, db } from '../firebase.js';
 
 const AuthContext = createContext(undefined);
 
-const ROOT_ADMIN_EMAILS = [
+export const ROOT_ADMIN_EMAILS = [
+  'khalid.niletechno@gmail.com',
   'khalidsalah948@gmail.com',
   'khalidsalah9444@gmail.com',
 ];
 
-function getCachedAuth() {
-  try {
-    const raw = localStorage.getItem('mutabi_auth_user');
-    const rawDoc = localStorage.getItem('mutabi_auth_userdoc');
-    if (raw) {
-      return {
-        user: JSON.parse(raw),
-        userDoc: rawDoc ? JSON.parse(rawDoc) : null,
-      };
-    }
-  } catch {}
-  return { user: null, userDoc: null };
-}
+export const isRootAdminEmail = (email) =>
+  !!email && ROOT_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === String(email).trim().toLowerCase());
 
 export function AuthProvider({ children }) {
-  const cached = getCachedAuth();
-  const [user, setUser] = useState(cached.user);
-  const [userDoc, setUserDoc] = useState(cached.userDoc);
-  const [isAdmin, setIsAdmin] = useState(() => {
-    return cached.user?.email && ROOT_ADMIN_EMAILS.includes(cached.user.email);
-  });
-  const [loading, setLoading] = useState(!cached.user);
+  const [user, setUser] = useState(null);
+  const [userDoc, setUserDoc] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [error, setError] = useState(null);
+  const [profileSyncError, setProfileSyncError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const pendingNameRef = useRef(null);
 
   useEffect(() => {
-    // Explicitly enforce persistent auth state
-    setPersistence(auth, browserLocalPersistence).catch(() => {});
+    try {
+      setPersistence(auth, browserLocalPersistence).catch(() => {});
+    } catch {}
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        try {
-          localStorage.setItem('mutabi_auth_user', JSON.stringify({
-            uid: currentUser.uid,
-            email: currentUser.email,
-            displayName: currentUser.displayName,
-            photoURL: currentUser.photoURL,
-          }));
-        } catch {}
-
+        setProfileSyncError(null);
         try {
           const userRef = doc(db, 'users', currentUser.uid);
           const adminRef = doc(db, 'admins', currentUser.uid);
 
-          // Check if user is strictly marked as admin in Firestore /admins/{uid}
+          let admin = isRootAdminEmail(currentUser.email);
           try {
             const adminSnap = await getDoc(adminRef);
-            if (adminSnap.exists() && adminSnap.data()?.role === 'admin') {
-              setIsAdmin(true);
-            } else {
-              setIsAdmin(false);
+            if (adminSnap.exists()) {
+              admin = true;
+            } else if (admin) {
+              setDoc(adminRef, { role: 'admin', createdAt: serverTimestamp() }).catch((err) => {
+                console.error('Failed to create root admin marker in Realtime Database:', err);
+              });
             }
-          } catch (e) {
-            setIsAdmin(false);
+          } catch {
+            // Keep root admin evaluation if getDoc fails
           }
+          setIsAdmin(admin);
 
-          // Fetch or initialize user profile document
           const userSnap = await getDoc(userRef);
           if (!userSnap.exists()) {
             const newDoc = {
-              displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'مستخدم جديد',
+              displayName:
+                pendingNameRef.current ||
+                currentUser.displayName ||
+                currentUser.email?.split('@')[0] ||
+                'مستخدم جديد',
               email: currentUser.email || '',
               photoURL: currentUser.photoURL || null,
               timezone: 'Africa/Cairo',
@@ -95,34 +85,25 @@ export function AuthProvider({ children }) {
               createdAt: serverTimestamp(),
               lastActiveAt: serverTimestamp(),
             };
+            pendingNameRef.current = null;
             await setDoc(userRef, newDoc);
-            setUserDoc({ ...newDoc, uid: currentUser.uid });
+            const full = { ...newDoc, uid: currentUser.uid };
+            setUserDoc(full);
           } else {
             const data = userSnap.data();
-            setUserDoc({ ...data, uid: currentUser.uid });
-            updateDoc(userRef, { lastActiveAt: serverTimestamp() }).catch(() => {});
+            await updateDoc(userRef, { lastActiveAt: serverTimestamp() });
+            const full = { ...data, uid: currentUser.uid };
+            setUserDoc(full);
           }
         } catch (err) {
-          console.warn('Initial profile fetch warning:', err);
-          // Set a fallback userDoc from currentUser in case DB is still propagating or offline
-          setUserDoc((prev) => prev || {
-            displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'مستخدم',
-            email: currentUser.email || '',
-            photoURL: currentUser.photoURL || null,
-            timezone: 'Africa/Cairo',
-            theme: 'light',
-            isDisabled: false,
-            uid: currentUser.uid,
-          });
-          if (err?.code !== 'unavailable' && !err?.message?.includes('client is offline')) {
-            try {
-              handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}`);
-            } catch (_) {}
-          }
+          console.error('Failed to sync user profile with Realtime Database:', err);
+          setUserDoc(null);
+          setProfileSyncError(err);
         }
       } else {
         setUserDoc(null);
         setIsAdmin(false);
+        setProfileSyncError(null);
       }
       setLoading(false);
     });
@@ -134,6 +115,7 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
     } catch (err) {
       const code = err?.code || '';
@@ -145,7 +127,7 @@ export function AuthProvider({ children }) {
       } else if (msg.includes('popup-closed-by-user')) {
         setError('تم إغلاق نافذة الدخول قبل إتمامها');
       } else {
-        setError('تعذر تسجيل الدخول عبر Google، يرجى المحاولة مرة أخرى');
+        setError(err?.message || 'تعذر تسجيل الدخول عبر Google، يرجى المحاولة مرة أخرى');
       }
       throw err;
     }
@@ -163,7 +145,7 @@ export function AuthProvider({ children }) {
       ) {
         setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
       } else {
-        setError('تعذر تسجيل الدخول، يرجى التحقق من البيانات المدخلة');
+        setError(err?.message || 'تعذر تسجيل الدخول، يرجى التحقق من البيانات المدخلة');
       }
       throw err;
     }
@@ -171,28 +153,21 @@ export function AuthProvider({ children }) {
 
   const registerWithEmail = async (name, email, pass) => {
     setError(null);
+    const cleanName = name.trim() || 'مستخدم جديد';
+    pendingNameRef.current = cleanName;
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      const userRef = doc(db, 'users', cred.user.uid);
-      const newDoc = {
-        displayName: name.trim() || 'مستخدم جديد',
-        email,
-        photoURL: null,
-        timezone: 'Africa/Cairo',
-        theme: 'light',
-        isDisabled: false,
-        createdAt: serverTimestamp(),
-        lastActiveAt: serverTimestamp(),
-      };
-      await setDoc(userRef, newDoc);
-      setUserDoc({ ...newDoc, uid: cred.user.uid });
+      try {
+        await updateProfile(cred.user, { displayName: cleanName });
+      } catch {}
     } catch (err) {
+      pendingNameRef.current = null;
       if (err.code === 'auth/email-already-in-use') {
         setError('هذا البريد الإلكتروني مسجل بالفعل');
       } else if (err.code === 'auth/weak-password') {
         setError('كلمة المرور ضعيفة (يجب أن تتكون من 6 خانات على الأقل)');
       } else {
-        setError('تعذر إنشاء الحساب، يرجى المحاولة مجددًا');
+        setError(err?.message || 'تعذر إنشاء الحساب، يرجى المحاولة مجددًا');
       }
       throw err;
     }
@@ -216,24 +191,22 @@ export function AuthProvider({ children }) {
         ...fields,
         updatedAt: serverTimestamp(),
       });
-      setUserDoc((prev) => ({ ...prev, ...fields }));
+      setUserDoc((prev) => {
+        const next = { ...prev, ...fields };
+        return next;
+      });
     } catch (err) {
       console.error('Error updating user doc', err);
-      // Fallback local update
-      setUserDoc((prev) => ({ ...prev, ...fields }));
       throw err;
     }
   };
 
   const logout = async () => {
-    try {
-      localStorage.removeItem('mutabi_auth_user');
-      localStorage.removeItem('mutabi_auth_userdoc');
-    } catch {}
     await fbSignOut(auth);
     setUser(null);
     setUserDoc(null);
     setIsAdmin(false);
+    setProfileSyncError(null);
   };
 
   return (
@@ -241,6 +214,7 @@ export function AuthProvider({ children }) {
       value={{
         user,
         userDoc,
+        profileSyncError,
         isAdmin,
         loading,
         error,

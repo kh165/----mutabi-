@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import {
-  Lock,
   Mail,
   User,
   AlertCircle,
@@ -92,7 +91,7 @@ export function AuthPage() {
         <button
           type="button"
           onClick={toggleTheme}
-          className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-2xs transition-all"
+          className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-2xs transition-all cursor-pointer"
           title="تبديل المظهر"
         >
           {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
@@ -122,7 +121,7 @@ export function AuthPage() {
                 setMode('login');
                 setLocalError(null);
               }}
-              className={`py-2 text-xs font-bold rounded-xl transition-all ${
+              className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                 mode === 'login'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -289,7 +288,7 @@ export function AuthPage() {
                   setAccountNotFound(false);
                   setLocalError(null);
                 }}
-                className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5"
+                className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>إنشاء حساب جديد بهذا البريد الآن ↗</span>
               </button>
@@ -306,7 +305,7 @@ export function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
           >
             <span>
               {loading
@@ -323,7 +322,7 @@ export function AuthPage() {
             <button
               type="button"
               onClick={() => setMode('login')}
-              className="w-full text-center text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 py-2"
+              className="w-full text-center text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 py-2 cursor-pointer"
             >
               العودة لشاشة الدخول
             </button>

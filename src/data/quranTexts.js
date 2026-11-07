@@ -4,6 +4,8 @@
  * Pre-bundled offline library for immediate, 0ms latency reading, with fallback to official Tanzil API
  */
 
+import { getSurah } from './quran.js';
+
 export const AUTHENTIC_QURAN_SURAHS = {
   1: {
     number: 1,
@@ -146,16 +148,19 @@ export const AUTHENTIC_QURAN_SURAHS = {
 
 /**
  * Fetch authoritative Uthmani Quran verses from Tanzil via official verified API,
- * with resilient localStorage and IndexedDB caching for offline availability.
+ * with resilient localStorage cache for offline availability.
  */
 export async function getSurahAyahs(surahNumber) {
+  const num = Number(surahNumber);
+  const meta = getSurah(num);
+
   // 1. Check pre-bundled verified set first for 0ms load
-  if (AUTHENTIC_QURAN_SURAHS[surahNumber]) {
-    return AUTHENTIC_QURAN_SURAHS[surahNumber];
+  if (AUTHENTIC_QURAN_SURAHS[num]) {
+    return AUTHENTIC_QURAN_SURAHS[num];
   }
 
   // 2. Check persistent local storage cache
-  const cacheKey = `quran_uthmani_surah_${surahNumber}`;
+  const cacheKey = `quran_uthmani_surah_${num}`;
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -165,14 +170,13 @@ export async function getSurahAyahs(surahNumber) {
 
   // 3. Fetch from authoritative Tanzil Uthmani Edition
   try {
-    const res = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/quran-uthmani`);
+    const res = await fetch(`https://api.alquran.cloud/v1/surah/${num}/quran-uthmani`);
     if (res.ok) {
       const data = await res.json();
       if (data?.data?.ayahs) {
-        // Strip out the prepended bismillah for Surahs other than Al-Fatihah (Surah 1) if present
         const processedAyahs = data.data.ayahs.map((a, index) => {
           let text = a.text;
-          if (surahNumber !== 1 && index === 0 && text.startsWith("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ")) {
+          if (num !== 1 && index === 0 && text.startsWith("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ")) {
             text = text.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ", "");
           }
           return {
@@ -183,7 +187,7 @@ export async function getSurahAyahs(surahNumber) {
 
         const result = {
           number: data.data.number,
-          name: data.data.name,
+          name: meta?.name || data.data.name,
           englishName: data.data.englishName,
           revelationType: data.data.revelationType === 'Meccan' ? 'مكية' : 'مدنية',
           ayahsCount: data.data.numberOfAyahs,
@@ -200,15 +204,15 @@ export async function getSurahAyahs(surahNumber) {
     console.warn('Network fetch for Quran surah failed, trying secondary mirror:', err);
   }
 
-  // Secondary mirror: Quran.com API v4
+  // 4. Secondary mirror: Quran.com API v4
   try {
-    const res = await fetch(`https://api.quran.com/api/v4/quran/verses/uthmani?chapter_number=${surahNumber}`);
+    const res = await fetch(`https://api.quran.com/api/v4/quran/verses/uthmani?chapter_number=${num}`);
     if (res.ok) {
       const json = await res.json();
       if (json?.verses) {
         const result = {
-          number: surahNumber,
-          name: `سورة رقم ${surahNumber}`,
+          number: num,
+          name: meta?.name || `سورة رقم ${num}`,
           ayahs: json.verses.map((v, idx) => ({
             number: idx + 1,
             text: v.text_uthmani,
@@ -224,8 +228,8 @@ export async function getSurahAyahs(surahNumber) {
 
   // Fallback if offline and not in bundle
   return {
-    number: surahNumber,
-    name: `سورة رقم ${surahNumber}`,
+    number: num,
+    name: meta?.name || `سورة رقم ${num}`,
     ayahs: [
       { number: 1, text: "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ" },
       { number: 2, text: "يرجى التأكد من الاتصال بالإنترنت لتحميل نصوص هذه السورة بالرسم العثماني المعتمد للمرة الأولى وحفظها للقراءة الدائمة دون إنترنت." }

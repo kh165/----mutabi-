@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   collection,
   onSnapshot,
@@ -9,8 +9,8 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase.js';
+} from '../firebase.js';
+import { db, handleDatabaseError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export const INITIAL_PRESETS = [
@@ -128,24 +128,31 @@ export const INITIAL_PRESETS = [
   },
 ];
 
+const presetId = (idx) => `preset_${idx + 1}`;
+
+const buildPresets = () =>
+  INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || presetId(idx) }));
+
+const stripUndefined = (obj) =>
+  Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+
 export function useActivities(fetchAll = false) {
   const { user } = useAuth();
-  const [activities, setActivities] = useState(() => {
-    try {
-      const cached = localStorage.getItem('mutabi_activities_cache');
-      if (cached) return JSON.parse(cached);
-    } catch {}
-    return INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || `preset_${idx + 1}` }));
-  });
+  const dbCountRef = useRef(-1);
+  const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!user) {
       setActivities([]);
       setLoading(false);
+      setError(null);
       return;
     }
 
+    setLoading(true);
+    setError(null);
     const q = query(collection(db, 'activities'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(
       q,
@@ -154,29 +161,24 @@ export function useActivities(fetchAll = false) {
         snapshot.forEach((docSnap) => {
           items.push({ id: docSnap.id, ...docSnap.data() });
         });
+        dbCountRef.current = items.length;
 
-        if (items.length === 0) {
-          // If Firestore activities collection is not yet seeded, provide the built-in presets
-          const presets = INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || `preset_${idx + 1}` }));
-          setActivities(presets);
-        } else if (fetchAll) {
-          setActivities(items);
-          try { localStorage.setItem('mutabi_activities_cache', JSON.stringify(items)); } catch {}
-        } else {
-          // Filter strictly for current user
-          const filtered = items.filter((a) => {
-            if (!a.isActive) return false;
-            if (a.audience === 'all') return true;
-            return a.assignedUids?.includes(user.uid);
-          });
-          setActivities(filtered);
-          try { localStorage.setItem('mutabi_activities_cache', JSON.stringify(filtered)); } catch {}
-        }
+        const filtered = fetchAll
+          ? items
+          : items.filter((a) => {
+              if (!a.isActive) return false;
+              if (a.audience === 'all') return true;
+              return a.assignedUids?.includes(user.uid);
+            });
+        setActivities(filtered);
+        setError(null);
         setLoading(false);
       },
       (error) => {
-        console.warn('Activities fetch warning, falling back to built-in presets:', error);
-        setActivities(INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || `preset_${idx + 1}` })));
+        console.error('Activities fetch failed:', error);
+        dbCountRef.current = -1;
+        setActivities([]);
+        setError(error);
         setLoading(false);
       }
     );
@@ -184,23 +186,53 @@ export function useActivities(fetchAll = false) {
     return () => unsubscribe();
   }, [user, fetchAll]);
 
+  const seedPresetsToDatabase = async () => {
+    if (dbCountRef.current > 0) return;
+    if (dbCountRef.current !== 0) {
+      throw new Error('تعذر التحقق من قائمة الأنشطة في قاعدة البيانات. أعد المحاولة بعد استعادة الاتصال.');
+    }
+    for (let i = 0; i < INITIAL_PRESETS.length; i++) {
+      const item = INITIAL_PRESETS[i];
+      const id = presetId(i);
+      await setDoc(doc(db, 'activities', id), {
+        ...item,
+        id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  };
+
   const saveActivity = async (data) => {
     try {
       if (data.id) {
+        if (String(data.id).startsWith('preset_') && dbCountRef.current === 0) {
+          await seedPresetsToDatabase();
+        }
         const ref = doc(db, 'activities', data.id);
-        await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
+        await setDoc(
+          ref,
+          stripUndefined({
+            ...data,
+            createdAt: data.createdAt || serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }),
+          { merge: true }
+        );
       } else {
         const ref = doc(collection(db, 'activities'));
-        const newAct = {
-          ...data,
-          id: ref.id,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        };
-        await setDoc(ref, newAct);
+        await setDoc(
+          ref,
+          stripUndefined({
+            ...data,
+            id: ref.id,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          })
+        );
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `activities/${data.id || 'new'}`);
+      handleDatabaseError(err, OperationType.WRITE, `activities/${data.id || 'new'}`);
       throw err;
     }
   };
@@ -209,40 +241,35 @@ export function useActivities(fetchAll = false) {
     try {
       await deleteDoc(doc(db, 'activities', id));
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `activities/${id}`);
+      handleDatabaseError(err, OperationType.DELETE, `activities/${id}`);
       throw err;
     }
   };
 
   const reorderActivities = async (orderedList) => {
-    setActivities(orderedList);
-    for (let i = 0; i < orderedList.length; i++) {
-      const item = orderedList[i];
-      if (item.order !== i + 1) {
-        updateDoc(doc(db, 'activities', item.id), {
-          order: i + 1,
-          updatedAt: serverTimestamp(),
-        }).catch(() => {});
-      }
-    }
-  };
-
-  const seedPresetsToDatabase = async () => {
-    for (let i = 0; i < INITIAL_PRESETS.length; i++) {
-      const item = INITIAL_PRESETS[i];
-      const newDocRef = doc(collection(db, 'activities'));
-      await setDoc(newDocRef, {
-        ...item,
-        id: newDocRef.id,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    try {
+      await Promise.all(
+        orderedList.flatMap((item, index) =>
+          item.order === index + 1
+            ? []
+            : [
+            updateDoc(doc(db, 'activities', item.id), {
+              order: index + 1,
+              updatedAt: serverTimestamp(),
+            }),
+          ]
+        )
+      );
+    } catch (err) {
+      handleDatabaseError(err, OperationType.UPDATE, 'activities');
+      throw err;
     }
   };
 
   return {
     activities,
     loading,
+    error,
     saveActivity,
     deleteActivity,
     reorderActivities,

@@ -48,11 +48,11 @@ export function PWAInstallBanner() {
           {/* Logo & Text */}
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 p-1 flex items-center justify-center shrink-0 shadow-2xs">
-              <img
-                src="/logo.png"
-                alt="شعار مُتَابِع"
-                className="w-full h-full object-contain"
-              />
+              <svg className="w-full h-full text-emerald-600" viewBox="0 0 48 48" fill="none">
+                <rect width="48" height="48" rx="10" fill="#059669" />
+                <path d="M24 10L35 24L24 38L13 24L24 10Z" stroke="white" strokeWidth="2.5" strokeLinejoin="round" fill="none" />
+                <circle cx="24" cy="24" r="5" fill="#10B981" />
+              </svg>
             </div>
             <div className="min-w-0">
               <h4 className="text-xs font-black text-slate-900 dark:text-white leading-tight">

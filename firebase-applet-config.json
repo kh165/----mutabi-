@@ -1,5 +1,6 @@
 {
   "projectId": "mutabi-acb51",
+  "databaseURL": "https://mutabi-acb51-default-rtdb.firebaseio.com/",
   "appId": "1:610797985015:web:fa93c803c9c8c18e8407f2",
   "apiKey": "AIzaSyCXpbrbwbLPcScmcADfC4AkilgXzGRkgRc",
   "authDomain": "mutabi-acb51.firebaseapp.com",

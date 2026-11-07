@@ -1,46 +1,76 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLogs } from '../hooks/useLogs.js';
+import { useActivities } from '../hooks/useActivities.js';
 import { TasbeehCounter } from '../components/TasbeehCounter.jsx';
 import { getTodayDateString, formatArabicDate } from '../lib/dates.js';
 import { Heart, CheckCircle2, X } from 'lucide-react';
+
+const ADHKAR_SESSION_TITLES = ['أذكار الصباح', 'أذكار المساء'];
 
 export function TasbeehPage() {
   const { userDoc } = useAuth();
   const todayStr = getTodayDateString(userDoc?.timezone);
   const { logs, saveLog } = useLogs();
+  const { activities } = useActivities(false);
   const [successBanner, setSuccessBanner] = useState(null);
 
-  // Find existing tasbeeh log for today if any
+  // ربط التسبيح بالنشاط الحقيقي (لو موجود) عشان يظهر في كارت اليوم والإحصائيات
+  const tasbeehActivity = activities.find((a) => a.title.includes('التسبيح'));
+  const adhkarActivity = activities.find(
+    (a) => a.title.includes('أذكار') && !a.title.includes('التسبيح')
+  );
+  const tasbeehActivityId = tasbeehActivity?.id || 'tasbeeh';
+  const tasbeehTarget = tasbeehActivity?.dailyTarget || 1;
+
   const todayTasbeehLog = logs.find(
-    (l) => l.date === todayStr && (l.activityId === 'tasbeeh' || l.activityId.startsWith('tasbeeh_'))
+    (l) =>
+      l.date === todayStr &&
+      (l.activityId === tasbeehActivityId || l.activityId === 'tasbeeh')
   );
 
   const initialCount = todayTasbeehLog?.amount || 0;
+  const initialCounterState = todayTasbeehLog?.details?.counter || null;
 
-  const handleSaveTasbeeh = async (count, dhikrTitle) => {
-    try {
+  const persistTasbeehLog = async (count, dhikrTitle, counterState) => {
+    if (ADHKAR_SESSION_TITLES.includes(dhikrTitle)) {
       await saveLog(
-        'tasbeeh',
+        adhkarActivity?.id || 'adhkar',
         todayStr,
-        count,
-        count > 0,
-        {
-          dhikr: dhikrTitle,
-          updatedAt: new Date().toISOString(),
-        },
-        dhikrTitle || 'تسبيح وأذكار'
+        1,
+        true,
+        { category: dhikrTitle },
+        dhikrTitle
       );
-      setSuccessBanner(`تقبل الله منك! تم حفظ ${count} تسبيحة في ميزان حسناتك وسجلك اليومي بنجاح.`);
-      setTimeout(() => setSuccessBanner(null), 5000);
-    } catch (err) {
-      console.error('Error saving tasbeeh:', err);
+      return;
     }
+
+    await saveLog(
+      tasbeehActivityId,
+      todayStr,
+      count,
+      count >= tasbeehTarget,
+      {
+        dhikr: dhikrTitle,
+        counter: counterState || null,
+        updatedAt: new Date().toISOString(),
+      },
+      dhikrTitle || 'تسبيح وأذكار'
+    );
+  };
+
+  const handleSaveTasbeeh = async (count, dhikrTitle, counterState) => {
+    await persistTasbeehLog(count, dhikrTitle, counterState);
+    if (ADHKAR_SESSION_TITLES.includes(dhikrTitle)) {
+      setSuccessBanner(`تقبل الله منك! تم تسجيل «${dhikrTitle}» في سجلك اليومي.`);
+    } else {
+      setSuccessBanner(`تقبل الله منك! تم حفظ ${count} تسبيحة في ميزان حسناتك وسجلك اليومي بنجاح.`);
+    }
+    setTimeout(() => setSuccessBanner(null), 5000);
   };
 
   return (
     <div className="space-y-6 text-right max-w-4xl mx-auto">
-      {/* Success Banner */}
       {successBanner && (
         <div className="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-3xl p-4 flex items-center justify-between gap-3 text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-bold shadow-sm animate-in fade-in">
           <div className="flex items-center gap-2">
@@ -50,14 +80,13 @@ export function TasbeehPage() {
           <button
             type="button"
             onClick={() => setSuccessBanner(null)}
-            className="w-7 h-7 rounded-full hover:bg-emerald-200/50 flex items-center justify-center text-emerald-800 dark:text-emerald-300"
+            className="w-7 h-7 rounded-full hover:bg-emerald-200/50 flex items-center justify-center text-emerald-800 dark:text-emerald-300 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Intro Header */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold mb-2">
@@ -73,11 +102,12 @@ export function TasbeehPage() {
         </div>
       </div>
 
-      {/* Standalone Tasbeeh Counter & Adhkar */}
       <TasbeehCounter
         todayStr={todayStr}
         initialCount={initialCount}
+        initialCounterState={initialCounterState}
         onSaveCount={handleSaveTasbeeh}
+        onCountChange={persistTasbeehLog}
       />
     </div>
   );

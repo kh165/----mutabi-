@@ -10,22 +10,23 @@ import { getTodayDateString, formatArabicDate } from '../../lib/dates.js';
 import { calculateStreaks, calculateKhatma } from '../../lib/stats.js';
 import { evaluateBadges } from '../../lib/badges.js';
 import { getSurah, TOTAL_PAGES } from '../../data/quran.js';
-import { ProgressRing } from '../../components/ProgressRing.jsx';
+import { MORNING_ADHKAR, EVENING_ADHKAR } from '../../data/adhkar.js';
 import {
   collection,
-  onSnapshot,
   query,
-  where,
+  onSnapshot,
+  getDocs,
   doc,
   updateDoc,
-} from 'firebase/firestore';
-import { db } from '../../firebase.js';
+  where,
+  db,
+  isDatabasePermissionError,
+} from '../../firebase.js';
 import * as LucideIcons from 'lucide-react';
 import {
   Users,
   Shield,
   Layers,
-  CircleDot,
   Search,
   Plus,
   Trash2,
@@ -38,18 +39,15 @@ import {
   UserCheck,
   Quote,
   MessageSquareHeart,
+  Heart,
   Video,
   ArrowUp,
   ArrowDown,
   Calendar,
   Flame,
-  BookOpen,
   Award,
-  AlertCircle,
-  Eye,
   CheckCircle2,
   XCircle,
-  ExternalLink,
   Loader2,
   ListVideo,
 } from 'lucide-react';
@@ -119,6 +117,7 @@ export function AdminDashboard() {
   const { isDark } = useTheme();
   const {
     activities,
+    error: activitiesError,
     saveActivity,
     deleteActivity,
     reorderActivities,
@@ -135,12 +134,23 @@ export function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('user-inspection');
   const [usersList, setUsersList] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
+  const [usersError, setUsersError] = useState(null);
+  const [databaseActionError, setDatabaseActionError] = useState(null);
   const [userSearch, setUserSearch] = useState('');
 
   // Detailed User Inspection state
   const [selectedUser, setSelectedUser] = useState(null);
   const [userLogs, setUserLogs] = useState([]);
   const [loadingUserLogs, setLoadingUserLogs] = useState(false);
+  const [userLogsError, setUserLogsError] = useState(null);
+  const [userItemProgress, setUserItemProgress] = useState([]);
+  const [loadingItemProgress, setLoadingItemProgress] = useState(false);
+  const [itemProgressError, setItemProgressError] = useState(null);
+  const [userAdhkarProgress, setUserAdhkarProgress] = useState({});
+  const [loadingAdhkarProgress, setLoadingAdhkarProgress] = useState(false);
+  const [adhkarProgressError, setAdhkarProgressError] = useState(null);
+  const [activityItems, setActivityItems] = useState({});
+  const [activityItemsError, setActivityItemsError] = useState(null);
   const [inspectionDate, setInspectionDate] = useState(() => getTodayDateString());
 
   // Note sending state
@@ -158,11 +168,17 @@ export function AdminDashboard() {
   const [videoManageActivityId, setVideoManageActivityId] = useState(null);
   const [seeding, setSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(false);
-  const [newSubItemTitle, setNewSubItemTitle] = useState('');
 
   // Fetch users list
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      setLoadingUsers(false);
+      setUsersError(new Error('الحساب الحالي غير مخوّل لقراءة قائمة المستخدمين.'));
+      return;
+    }
+
+    setLoadingUsers(true);
+    setUsersError(null);
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(
       q,
@@ -173,12 +189,16 @@ export function AdminDashboard() {
         });
         setUsersList(list);
         setLoadingUsers(false);
-        // Automatically select the first user if none selected
-        if (!selectedUser && list.length > 0) {
-          setSelectedUser(list[0]);
-        }
+        setUsersError(null);
+        setSelectedUser((current) => list.find((u) => u.uid === current?.uid) || list[0] || null);
       },
-      () => setLoadingUsers(false)
+      (error) => {
+        console.error('Failed to load Realtime Database users:', error);
+        setUsersList([]);
+        setSelectedUser(null);
+        setUsersError(error);
+        setLoadingUsers(false);
+      }
     );
     return () => unsubscribe();
   }, [isAdmin]);
@@ -187,9 +207,13 @@ export function AdminDashboard() {
   useEffect(() => {
     if (!selectedUser?.uid) {
       setUserLogs([]);
+      setUserLogsError(null);
+      setLoadingUserLogs(false);
       return;
     }
+    setUserLogs([]);
     setLoadingUserLogs(true);
+    setUserLogsError(null);
     const q = query(
       collection(db, 'logs'),
       where('uid', '==', selectedUser.uid)
@@ -200,12 +224,118 @@ export function AdminDashboard() {
         const list = [];
         snapshot.forEach((d) => list.push({ id: d.id, ...d.data() }));
         setUserLogs(list);
+        setUserLogsError(null);
         setLoadingUserLogs(false);
       },
-      () => setLoadingUserLogs(false)
+      (error) => {
+        console.error('Failed to load selected user Realtime Database logs:', error);
+        setUserLogs([]);
+        setUserLogsError(error);
+        setLoadingUserLogs(false);
+      }
     );
     return () => unsubscribe();
   }, [selectedUser?.uid]);
+
+  useEffect(() => {
+    if (!selectedUser?.uid) {
+      setUserAdhkarProgress({});
+      setAdhkarProgressError(null);
+      setLoadingAdhkarProgress(false);
+      return undefined;
+    }
+
+    setUserAdhkarProgress({});
+    setLoadingAdhkarProgress(true);
+    setAdhkarProgressError(null);
+    const unsubscribe = onSnapshot(
+      doc(db, 'adhkarProgress', selectedUser.uid, inspectionDate),
+      (snapshot) => {
+        setUserAdhkarProgress(snapshot.exists() ? snapshot.data() : {});
+        setLoadingAdhkarProgress(false);
+      },
+      (error) => {
+        console.error('Failed to load selected user adhkar progress:', error);
+        setAdhkarProgressError(error);
+        setLoadingAdhkarProgress(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [selectedUser?.uid, inspectionDate]);
+
+  useEffect(() => {
+    if (!selectedUser?.uid) {
+      setUserItemProgress([]);
+      setItemProgressError(null);
+      setLoadingItemProgress(false);
+      return;
+    }
+
+    setUserItemProgress([]);
+    setLoadingItemProgress(true);
+    setItemProgressError(null);
+    const progressQuery = query(
+      collection(db, 'itemProgress'),
+      where('uid', '==', selectedUser.uid)
+    );
+    const unsubscribe = onSnapshot(
+      progressQuery,
+      (snapshot) => {
+        const items = [];
+        snapshot.forEach((progressDoc) => {
+          items.push({ id: progressDoc.id, ...progressDoc.data() });
+        });
+        setUserItemProgress(items);
+        setItemProgressError(null);
+        setLoadingItemProgress(false);
+      },
+      (error) => {
+        console.error('Failed to load selected user Realtime Database item progress:', error);
+        setUserItemProgress([]);
+        setItemProgressError(error);
+        setLoadingItemProgress(false);
+      }
+    );
+    return () => unsubscribe();
+  }, [selectedUser?.uid]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const listeningActivities = activities.filter((activity) => activity.type === 'listen');
+
+    if (listeningActivities.length === 0) {
+      setActivityItems({});
+      setActivityItemsError(null);
+      return undefined;
+    }
+
+    Promise.all(
+      listeningActivities.map(async (activity) => {
+        const snapshot = await getDocs(collection(db, `activities/${activity.id}/items`));
+        return [
+          activity.id,
+          snapshot.docs.map((itemDoc) => ({ id: itemDoc.id, ...itemDoc.data() })),
+        ];
+      })
+    )
+      .then((entries) => {
+        if (!cancelled) {
+          setActivityItems(Object.fromEntries(entries));
+          setActivityItemsError(null);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load Realtime Database activity items for user inspection:', error);
+        if (!cancelled) {
+          setActivityItems({});
+          setActivityItemsError(error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activities]);
 
   const toggleUserStatus = async (uid, currentStatus) => {
     if (!uid) return;
@@ -247,22 +377,33 @@ export function AdminDashboard() {
     }
   };
 
-  const handleMoveActivity = (idx, direction) => {
+  const handleMoveActivity = async (idx, direction) => {
     const list = [...activities];
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= list.length) return;
     const temp = list[idx];
     list[idx] = list[targetIdx];
     list[targetIdx] = temp;
-    reorderActivities(list);
+    setDatabaseActionError(null);
+    try {
+      await reorderActivities(list);
+    } catch (err) {
+      setDatabaseActionError(err);
+    }
   };
 
   const handleSaveActivityForm = async (e) => {
     e.preventDefault();
     if (!editingActivity) return;
-    await saveActivity(editingActivity);
+    const toSave = editingActivity;
     setActivityModalOpen(false);
     setEditingActivity(null);
+    try {
+      await saveActivity(toSave);
+    } catch (err) {
+      console.error('Failed to save activity:', err);
+      setDatabaseActionError(err);
+    }
   };
 
   const handleSeedPresets = async () => {
@@ -272,18 +413,10 @@ export function AdminDashboard() {
       await seedPresetsToDatabase();
       setSeedSuccess(true);
       setTimeout(() => setSeedSuccess(false), 3000);
+    } catch (err) {
+      setDatabaseActionError(err);
     } finally {
       setSeeding(false);
-    }
-  };
-
-  const handleAddFivePrayersDirectly = async () => {
-    const prayerPreset = INITIAL_PRESETS.find((p) => p.type === 'prayers');
-    if (prayerPreset) {
-      await saveActivity({
-        ...prayerPreset,
-        order: activities.length + 1,
-      });
     }
   };
 
@@ -293,29 +426,49 @@ export function AdminDashboard() {
       u.email?.toLowerCase().includes(userSearch.toLowerCase())
   );
 
-  // Metrics for the inspected user
-  const inspectedUserStreaks = calculateStreaks(userLogs, inspectionDate);
-  const inspectedUserKhatma = calculateKhatma(userLogs, activities);
-  const inspectedUserBadges = evaluateBadges(userLogs, activities, inspectionDate);
-
-  // Group inspected user's logs for the selected inspection date
-  const inspectedDateLogs = userLogs.filter((l) => l.date === inspectionDate);
-  const inspectedLogsMap = new Map(inspectedDateLogs.map((l) => [l.activityId, l]));
-
-  const completedActivitiesCount = activities.filter((a) => {
-    const l = inspectedLogsMap.get(a.id);
-    return l && l.completed;
-  }).length;
-
   const totalAssignedActivities = activities.filter((a) => {
     if (!a.isActive) return false;
     if (a.audience === 'all') return true;
     return a.assignedUids?.includes(selectedUser?.uid);
   });
 
+  // Metrics for the inspected user
+  const inspectedUserStreaks = calculateStreaks(userLogs, inspectionDate);
+  const inspectedUserKhatma = calculateKhatma(userLogs, activities);
+  const inspectedUserBadges = evaluateBadges(userLogs, totalAssignedActivities, inspectionDate);
+
+  // Group inspected user's logs for the selected inspection date
+  const inspectedDateLogs = userLogs.filter((l) => l.date === inspectionDate);
+  const inspectedLogsMap = new Map(inspectedDateLogs.map((l) => [l.activityId, l]));
+
+  const completedActivitiesCount = totalAssignedActivities.filter((activity) =>
+    inspectedLogsMap.get(activity.id)?.completed
+  ).length;
+  const partialActivitiesCount = totalAssignedActivities.filter((activity) => {
+    const log = inspectedLogsMap.get(activity.id);
+    return !!log && !log.completed && log.amount > 0;
+  }).length;
+  const missingActivityLogsCount = totalAssignedActivities.filter(
+    (activity) => !inspectedLogsMap.has(activity.id)
+  ).length;
+
   const completionPercentage = totalAssignedActivities.length > 0
     ? Math.round((completedActivitiesCount / totalAssignedActivities.length) * 100)
     : 0;
+  const adhkarProgressStats = [
+    { key: 'morning', title: 'أذكار الصباح', items: MORNING_ADHKAR },
+    { key: 'evening', title: 'أذكار المساء', items: EVENING_ADHKAR },
+  ].map(({ key, title, items }) => {
+    const saved = userAdhkarProgress[key] || {};
+    return {
+      key,
+      title,
+      completed: items.filter((item) => Number(saved[item.id]?.count) >= item.count).length,
+      total: items.length,
+      repetitions: items.reduce((sum, item) => sum + (Number(saved[item.id]?.count) || 0), 0),
+      requiredRepetitions: items.reduce((sum, item) => sum + item.count, 0),
+    };
+  });
 
   const tabs = [
     { id: 'user-inspection', label: 'متابعة إنجازات المستخدمين', icon: Users },
@@ -327,6 +480,15 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6 text-right">
+      {databaseActionError && (
+        <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-xs text-red-800 dark:text-red-200">
+          لم يكتمل الحفظ في Realtime Database:{' '}
+          {isDatabasePermissionError(databaseActionError)
+            ? 'تم رفض العملية. تحقق من صلاحيات حساب الإدارة وقواعد Realtime Database.'
+            : databaseActionError.message}
+        </div>
+      )}
+
       {/* Top Admin Header */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -358,7 +520,7 @@ export function AdminDashboard() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 ${
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                   active
                     ? 'bg-emerald-600 text-white shadow-sm'
                     : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
@@ -372,12 +534,29 @@ export function AdminDashboard() {
         </div>
       </div>
 
-      {/* ======================================================== */}
-      {/* TAB: USER INSPECTION (KEY USER FEATURE: WHAT THEY DID & DIDN'T DO) */}
-      {/* ======================================================== */}
+      {/* TAB: USER INSPECTION */}
       {activeTab === 'user-inspection' && (
         <div className="space-y-6">
-          {/* User selector and search header */}
+          {(usersError || activitiesError) && (
+            <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-2xl p-4 text-xs text-red-800 dark:text-red-200 space-y-1">
+              <p className="font-bold">تعذر تحميل بيانات المتابعة من Realtime Database.</p>
+              {usersError && (
+                <p>
+                  قائمة المستخدمين: {isDatabasePermissionError(usersError)
+                    ? 'تم رفض القراءة. تحقق من نشر قواعد Realtime Database وأن حسابك الإداري مصرح له.'
+                    : usersError.message}
+                </p>
+              )}
+              {activitiesError && (
+                <p>
+                  الأنشطة: {isDatabasePermissionError(activitiesError)
+                    ? 'تم رفض قراءة الأنشطة من قواعد Realtime Database.'
+                    : activitiesError.message}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -403,11 +582,24 @@ export function AdminDashboard() {
               </div>
             </div>
 
-            {/* User pills / cards horizontal carousel */}
             {loadingUsers ? (
               <div className="p-8 text-center text-xs text-slate-400">جارٍ جلب قائمة المستخدمين...</div>
             ) : filteredUsers.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400">لا يوجد مستخدمون مطابقون</div>
+              <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400 space-y-2">
+                <p>
+                  {userSearch
+                    ? 'لا يوجد مستخدمون يطابقون البحث.'
+                    : usersList.length === 0
+                    ? 'لا توجد ملفات مستخدمين في مسار users بقاعدة Realtime Database الحالية.'
+                    : 'لا يوجد مستخدمون مطابقون.'}
+                </p>
+                {!userSearch && usersList.length === 0 && !usersError && (
+                  <p>
+                    هذه القائمة تُقرأ من users/{'{uid}'}؛ حسابات Firebase Authentication التي لم تُنشأ لها وثيقة ملف مستخدم لا يمكن للقائمة قراءتها من المتصفح.
+                    اطلب من المستخدم تسجيل الدخول بعد نشر الإصلاح، ثم تحقق من ظهور users/{'{uid}'} في Realtime Database.
+                  </p>
+                )}
+              </div>
             ) : (
               <div className="flex gap-2.5 overflow-x-auto pb-2 pt-1">
                 {filteredUsers.map((u) => {
@@ -417,7 +609,7 @@ export function AdminDashboard() {
                       key={u.uid}
                       type="button"
                       onClick={() => setSelectedUser(u)}
-                      className={`flex items-center gap-3 p-3 rounded-2xl border text-right transition-all shrink-0 min-w-[220px] ${
+                      className={`flex items-center gap-3 p-3 rounded-2xl border text-right transition-all shrink-0 min-w-[220px] cursor-pointer ${
                         isSelected
                           ? 'border-emerald-500 bg-emerald-50/70 dark:bg-emerald-950/60 shadow-sm'
                           : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700'
@@ -448,10 +640,9 @@ export function AdminDashboard() {
             )}
           </div>
 
-          {/* If user is selected, show deep inspection view */}
           {selectedUser && (
             <div className="space-y-6">
-              {/* Profile Bar & Date Selector for Selected User */}
+              {/* Profile Bar & Date Selector */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
                 <div className="flex items-center gap-4 min-w-0">
                   <div className="w-14 h-14 rounded-3xl bg-emerald-600 text-white font-black text-xl flex items-center justify-center shrink-0 shadow-md">
@@ -465,7 +656,7 @@ export function AdminDashboard() {
                       <button
                         type="button"
                         onClick={() => toggleUserStatus(selectedUser.uid, selectedUser.isDisabled)}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 ${
+                        className={`text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer ${
                           selectedUser.isDisabled
                             ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 hover:bg-red-200'
                             : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200'
@@ -492,21 +683,21 @@ export function AdminDashboard() {
                     type="date"
                     value={inspectionDate}
                     onChange={(e) => setInspectionDate(e.target.value)}
-                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    max={getTodayDateString()}
+                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                   />
                   <button
                     type="button"
                     onClick={() => setInspectionDate(getTodayDateString())}
-                    className="text-xs text-emerald-700 dark:text-emerald-400 font-bold hover:underline"
+                    className="text-xs text-emerald-700 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
                   >
                     اليوم
                   </button>
                 </div>
               </div>
 
-              {/* Inspected User KPIs (Streak, Khatma, Badges, Daily completion) */}
+              {/* Inspected User KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                {/* Daily Completion Rate */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xs">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-400">إنجاز اليوم المختار</span>
                   <div className="text-2xl font-black text-slate-900 dark:text-white mt-1">
@@ -523,7 +714,6 @@ export function AdminDashboard() {
                   </p>
                 </div>
 
-                {/* User Streak */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xs">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-400">سلسلة الاستمرار المتواصل</span>
                   <div className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
@@ -535,7 +725,6 @@ export function AdminDashboard() {
                   </p>
                 </div>
 
-                {/* User Khatma Status */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xs">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-400">ختمة القرآن الكريم</span>
                   <div className="text-2xl font-black text-sky-600 dark:text-sky-400 mt-1">
@@ -546,7 +735,6 @@ export function AdminDashboard() {
                   </p>
                 </div>
 
-                {/* Badges Earned */}
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xs">
                   <span className="text-xs font-bold text-slate-500 dark:text-slate-400">الأوسمة المحققة</span>
                   <div className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 flex items-center gap-1.5">
@@ -559,7 +747,7 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              {/* CORE SECTION 1: WHAT THEY COMPLETED VS WHAT THEY MISSED (اليوم المختار) */}
+              {/* CORE SECTION 1: WHAT THEY COMPLETED VS WHAT THEY MISSED */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
                   <div>
@@ -575,15 +763,25 @@ export function AdminDashboard() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950 px-2.5 py-1 rounded-xl">
-                      أُنجز {completedActivitiesCount}
+                      مكتمل {completedActivitiesCount}
                     </span>
-                    <span className="text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 px-2.5 py-1 rounded-xl">
-                      لم يُنجز {Math.max(0, totalAssignedActivities.length - completedActivitiesCount)}
+                    <span className="text-xs font-bold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950 px-2.5 py-1 rounded-xl">
+                      جزئي {partialActivitiesCount}
+                    </span>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-xl">
+                      بلا سجل {missingActivityLogsCount}
                     </span>
                   </div>
                 </div>
 
-                {loadingUserLogs ? (
+                {userLogsError ? (
+                  <div className="p-5 text-center text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-2xl">
+                    تعذر قراءة إنجازات المستخدم من Realtime Database:{' '}
+                    {isDatabasePermissionError(userLogsError)
+                      ? 'تحقق من صلاحية الإدارة في قواعد Realtime Database.'
+                      : userLogsError.message}
+                  </div>
+                ) : loadingUserLogs ? (
                   <div className="p-8 text-center text-xs text-slate-400">جارٍ جلب السجلات...</div>
                 ) : totalAssignedActivities.length === 0 ? (
                   <div className="p-8 text-center text-xs text-slate-400">لا توجد أنشطة محددة لهذا المستخدم</div>
@@ -635,10 +833,15 @@ export function AdminDashboard() {
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 px-2.5 py-1 rounded-xl">
                                   <span>إنجاز جزئي ({log.amount})</span>
                                 </span>
+                              ) : hasLog ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-xl">
+                                  <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>سُجّل دون إنجاز</span>
+                                </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-xl">
                                   <XCircle className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>لم يُنجز بعد</span>
+                                  <span>لا يوجد سجل لهذا النشاط</span>
                                 </span>
                               )}
                             </div>
@@ -647,7 +850,6 @@ export function AdminDashboard() {
                           {/* Specific Details logged by the user */}
                           {hasLog && (
                             <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
-                              {/* Quran Memorization Details */}
                               {log.details?.surah && (
                                 <div className="p-2 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl text-emerald-900 dark:text-emerald-300 flex items-center justify-between text-xs">
                                   <span>
@@ -659,14 +861,12 @@ export function AdminDashboard() {
                                 </div>
                               )}
 
-                              {/* Quran Reading Details */}
                               {log.details?.fromPage && (
                                 <div className="p-2 bg-sky-50 dark:bg-sky-950/40 rounded-xl text-sky-900 dark:text-sky-300 text-xs">
                                   📖 من صفحة {log.details.fromPage} إلى صفحة {log.details.toPage} (إجمالي {log.amount} صفحات)
                                 </div>
                               )}
 
-                              {/* Prayers Details */}
                               {log.details?.prayers && (
                                 <div className="space-y-1 pt-1">
                                   <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
@@ -706,31 +906,6 @@ export function AdminDashboard() {
                                 </div>
                               )}
 
-                              {/* Checklist Details */}
-                              {log.details?.checklist && (
-                                <div className="space-y-1 pt-1">
-                                  <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 block">
-                                    بنود القائمة:
-                                  </span>
-                                  <div className="space-y-1">
-                                    {Object.values(log.details.checklist).map((it) => (
-                                      <div
-                                        key={it.id}
-                                        className={`p-1.5 px-2.5 rounded-lg text-[11px] flex items-center justify-between ${
-                                          it.completed
-                                            ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 line-through'
-                                        }`}
-                                      >
-                                        <span>{it.title}</span>
-                                        <span>{it.completed ? 'أُنجز ✓' : 'لم ينجز'}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* User Reflection Note */}
                               {log.note && (
                                 <p className="p-2 bg-slate-50 dark:bg-slate-800/80 rounded-xl text-[11px] text-slate-700 dark:text-slate-300 italic">
                                   ملاحظة المستخدم: «{log.note}»
@@ -745,7 +920,117 @@ export function AdminDashboard() {
                 )}
               </div>
 
-              {/* CORE SECTION 2: COMPLETED ACHIEVEMENTS & BADGES (الأوسمة والإنجازات المحققة) */}
+              {/* LISTENING PROGRESS */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div>
+                    <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
+                      <Video className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      <span>تقدّم المقاطع المسجّل في Realtime Database</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      سجل المشاهدة الفعلي للمستخدم، منفصل عن إنجازات الأنشطة اليومية.
+                    </p>
+                  </div>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl">
+                    {userItemProgress.length} سجل
+                  </span>
+                </div>
+
+                {itemProgressError ? (
+                  <div className="p-5 text-center text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-2xl">
+                    تعذر قراءة تقدّم المقاطع من Realtime Database:{' '}
+                    {isDatabasePermissionError(itemProgressError)
+                      ? 'تحقق من صلاحية الإدارة في قواعد Realtime Database.'
+                      : itemProgressError.message}
+                  </div>
+                ) : loadingItemProgress || (userItemProgress.length > 0 && !Object.keys(activityItems).length && !activityItemsError) ? (
+                  <div className="p-6 text-center text-xs text-slate-400">جارٍ جلب تقدّم المقاطع...</div>
+                ) : activityItemsError ? (
+                  <div className="p-5 text-center text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/30 rounded-2xl">
+                    تعذر جلب أسماء المقاطع من قاعدة الأنشطة: {activityItemsError.message}
+                  </div>
+                ) : userItemProgress.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-400">
+                    لا توجد سجلات مشاهدة لهذا المستخدم في itemProgress.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {userItemProgress.map((progress) => {
+                      const activity = activities.find((item) => item.id === progress.activityId);
+                      const mediaItem = activityItems[progress.activityId]?.find(
+                        (item) => item.id === progress.itemId
+                      );
+                      const completed = !!progress.isCompleted;
+
+                      return (
+                        <div
+                          key={progress.id}
+                          className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-bold text-sm text-slate-900 dark:text-white truncate">
+                              {mediaItem?.title || `المقطع ${progress.itemId}`}
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                              {activity?.title || `النشاط ${progress.activityId}`}
+                              {' • '}
+                              {progress.minutesListened || 0} دقيقة
+                            </p>
+                          </div>
+                          <span className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-xl ${
+                            completed
+                              ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                              : 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                          }`}>
+                            {completed ? 'مكتمل' : `تقدّم ${progress.percentage || 0}%`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+                <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="font-black text-base text-slate-900 dark:text-white">
+                    تقدم أذكار الصباح والمساء
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    تكرارات الأذكار المسجلة في Realtime Database ليوم {formatArabicDate(inspectionDate, true)}.
+                  </p>
+                </div>
+                {adhkarProgressError ? (
+                  <div className="p-5 text-center text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 rounded-2xl">
+                    تعذر قراءة تقدم الأذكار:{' '}
+                    {isDatabasePermissionError(adhkarProgressError)
+                      ? 'تحقق من صلاحية الإدارة في قواعد Realtime Database.'
+                      : adhkarProgressError.message}
+                  </div>
+                ) : loadingAdhkarProgress ? (
+                  <div className="p-6 text-center text-xs text-slate-400">جارٍ جلب تقدم الأذكار...</div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {adhkarProgressStats.map((stats) => (
+                      <div
+                        key={stats.key}
+                        className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800"
+                      >
+                        <h4 className="font-bold text-sm text-slate-900 dark:text-white">{stats.title}</h4>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          أذكار مكتملة: {stats.completed} / {stats.total}
+                        </p>
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+                          التكرارات: {stats.repetitions} / {stats.requiredRepetitions}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* CORE SECTION 2: COMPLETED ACHIEVEMENTS & BADGES */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                   <div>
@@ -850,7 +1135,7 @@ export function AdminDashboard() {
                   <button
                     type="submit"
                     disabled={noteSending || !noteText.trim()}
-                    className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+                    className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>{noteSending ? 'جارٍ الإرسال...' : 'إرسال الرسالة التشجيعية'}</span>
@@ -862,9 +1147,7 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* ======================================================== */}
       {/* TAB: OVERVIEW */}
-      {/* ======================================================== */}
       {activeTab === 'overview' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -914,7 +1197,7 @@ export function AdminDashboard() {
                 type="button"
                 disabled={seeding}
                 onClick={handleSeedPresets}
-                className="py-2.5 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs shrink-0 disabled:opacity-50 flex items-center gap-1.5"
+                className="py-2.5 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs shrink-0 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
               >
                 <Award className="w-4 h-4" />
                 <span>{seeding ? 'جارٍ الحفظ...' : 'تهيئة الأنشطة المقترحة'}</span>
@@ -931,9 +1214,7 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* ======================================================== */}
       {/* TAB: ACTIVITIES MANAGEMENT */}
-      {/* ======================================================== */}
       {activeTab === 'activities' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -968,7 +1249,7 @@ export function AdminDashboard() {
                   });
                   setActivityModalOpen(true);
                 }}
-                className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all"
+                className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>إضافة نشاط جديد</span>
@@ -996,7 +1277,7 @@ export function AdminDashboard() {
                           type="button"
                           disabled={idx === 0}
                           onClick={() => handleMoveActivity(idx, 'up')}
-                          className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 disabled:opacity-30"
+                          className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 disabled:opacity-30 cursor-pointer"
                         >
                           <ArrowUp className="w-3.5 h-3.5" />
                         </button>
@@ -1004,7 +1285,7 @@ export function AdminDashboard() {
                           type="button"
                           disabled={idx === activities.length - 1}
                           onClick={() => handleMoveActivity(idx, 'down')}
-                          className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 disabled:opacity-30"
+                          className="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 disabled:opacity-30 cursor-pointer"
                         >
                           <ArrowDown className="w-3.5 h-3.5" />
                         </button>
@@ -1043,7 +1324,7 @@ export function AdminDashboard() {
                         <button
                           type="button"
                           onClick={() => setVideoManageActivityId(act.id)}
-                          className="px-3 py-1.5 bg-violet-50 dark:bg-violet-950/50 hover:bg-violet-100 text-violet-700 dark:text-violet-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
+                          className="px-3 py-1.5 bg-violet-50 dark:bg-violet-950/50 hover:bg-violet-100 text-violet-700 dark:text-violet-300 text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
                         >
                           <Video className="w-3.5 h-3.5" />
                           <span>إدارة الفيديوهات</span>
@@ -1056,7 +1337,7 @@ export function AdminDashboard() {
                           setEditingActivity(act);
                           setActivityModalOpen(true);
                         }}
-                        className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all"
+                        className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
                         title="تعديل النشاط"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -1065,11 +1346,9 @@ export function AdminDashboard() {
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`هل أنت متأكد من حذف نشاط "${act.title}"؟`)) {
-                            deleteActivity(act.id);
-                          }
+                          deleteActivity(act.id);
                         }}
-                        className="w-8 h-8 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 flex items-center justify-center transition-all"
+                        className="w-8 h-8 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 flex items-center justify-center transition-all cursor-pointer"
                         title="حذف النشاط"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1083,9 +1362,7 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* ======================================================== */}
       {/* TAB: ENCOURAGEMENTS */}
-      {/* ======================================================== */}
       {activeTab === 'encouragements' && (
         <div className="space-y-6">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
@@ -1112,7 +1389,7 @@ export function AdminDashboard() {
               <button
                 type="submit"
                 disabled={addingPhrase || !newPhraseText.trim()}
-                className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
+                className="py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50 cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
                 <span>{addingPhrase ? 'جارٍ الإضافة...' : 'إضافة العبارة'}</span>
@@ -1124,7 +1401,7 @@ export function AdminDashboard() {
                 <button
                   type="button"
                   onClick={seedDefaultPhrases}
-                  className="py-2 px-4 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1.5"
+                  className="py-2 px-4 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1.5 cursor-pointer"
                 >
                   <Heart className="w-3.5 h-3.5" />
                   <span>تهيئة باقة عبارات تشجيعية مقترحة</span>
@@ -1150,7 +1427,7 @@ export function AdminDashboard() {
                   <button
                     type="button"
                     onClick={() => deletePhrase(item.id)}
-                    className="w-8 h-8 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center transition-all shrink-0"
+                    className="w-8 h-8 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center transition-all shrink-0 cursor-pointer"
                     title="حذف العبارة"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1162,9 +1439,7 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* ======================================================== */}
       {/* TAB: REPORTS & EXPORT */}
-      {/* ======================================================== */}
       {activeTab === 'reports' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-sm space-y-4">
           <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center gap-2">
@@ -1188,7 +1463,7 @@ export function AdminDashboard() {
                 ]);
                 exportToCSV(`mutabi_users_${new Date().toISOString().split('T')[0]}`, headers, rows);
               }}
-              className="py-3 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-2 shadow-sm"
+              className="py-3 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-2 shadow-sm cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4" />
               <span>تصدير قائمة المستخدمين المعتمدين</span>
@@ -1197,9 +1472,7 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* ======================================================== */}
       {/* MODAL: ADD / EDIT ACTIVITY */}
-      {/* ======================================================== */}
       {activityModalOpen && editingActivity && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 dark:bg-slate-950/80 backdrop-blur-xs p-4 animate-in fade-in"
@@ -1216,7 +1489,7 @@ export function AdminDashboard() {
               <button
                 type="button"
                 onClick={() => setActivityModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1279,7 +1552,7 @@ export function AdminDashboard() {
                       }
                       setEditingActivity({ ...editingActivity, type: t, inputMode: mode, unit });
                     }}
-                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100"
+                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-100 cursor-pointer"
                   >
                     <option value="memorize">حفظ القرآن الكريم</option>
                     <option value="read">تلاوة القرآن (الختمة)</option>
@@ -1315,7 +1588,7 @@ export function AdminDashboard() {
                       key={c}
                       type="button"
                       onClick={() => setEditingActivity({ ...editingActivity, color: c })}
-                      className={`w-7 h-7 rounded-xl transition-transform ${
+                      className={`w-7 h-7 rounded-xl transition-transform cursor-pointer ${
                         editingActivity.color === c ? 'scale-125 ring-2 ring-slate-800 dark:ring-white ring-offset-2' : ''
                       }`}
                       style={{ backgroundColor: c }}
@@ -1344,7 +1617,7 @@ export function AdminDashboard() {
                               key={ic.id}
                               type="button"
                               onClick={() => setEditingActivity({ ...editingActivity, icon: ic.id })}
-                              className={`p-2 rounded-xl border flex items-center gap-2 transition-all text-right ${
+                              className={`p-2 rounded-xl border flex items-center gap-2 transition-all text-right cursor-pointer ${
                                 isSelected
                                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs font-bold'
                                   : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-emerald-300 text-slate-700 dark:text-slate-200'
@@ -1368,9 +1641,9 @@ export function AdminDashboard() {
                   id="actActive"
                   checked={editingActivity.isActive ?? true}
                   onChange={(e) => setEditingActivity({ ...editingActivity, isActive: e.target.checked })}
-                  className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                  className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
                 />
-                <label htmlFor="actActive" className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                <label htmlFor="actActive" className="text-xs font-semibold text-slate-800 dark:text-slate-200 cursor-pointer">
                   تفعيل النشاط وإظهاره للمستخدمين
                 </label>
               </div>
@@ -1379,13 +1652,13 @@ export function AdminDashboard() {
                 <button
                   type="button"
                   onClick={() => setActivityModalOpen(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl"
+                  className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm cursor-pointer"
                 >
                   حفظ النشاط
                 </button>
@@ -1395,9 +1668,7 @@ export function AdminDashboard() {
         </div>
       )}
 
-      {/* ======================================================== */}
       {/* MODAL: VIDEO MANAGEMENT FOR 'LISTEN' ACTIVITIES */}
-      {/* ======================================================== */}
       {videoManageActivityId && (
         <VideoManagerModal
           activityId={videoManageActivityId}
@@ -1454,7 +1725,6 @@ function VideoManagerModal({ activityId, onClose }) {
     setSaving(true);
     try {
       if (detectedPlaylist?.items?.length > 0) {
-        // Batch insert entire detected playlist with exact titles and durations
         for (let i = 0; i < detectedPlaylist.items.length; i++) {
           const item = detectedPlaylist.items[i];
           await saveActivityItem({
@@ -1631,7 +1901,7 @@ function VideoManagerModal({ activityId, onClose }) {
               <button
                 type="button"
                 onClick={() => deleteActivityItem(it.id)}
-                className="w-7 h-7 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center"
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>

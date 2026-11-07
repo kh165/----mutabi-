@@ -6,22 +6,17 @@ import {
   Moon,
   Eye,
   X,
-  Search,
   CheckCircle2,
   ChevronRight,
   ChevronLeft,
-  Volume2,
-  VolumeX,
   Play,
   Pause,
-  RotateCcw,
 } from 'lucide-react';
 
 export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLogPagesRead }) {
   const [selectedSurah, setSelectedSurah] = useState(initialSurahNumber);
   const [surahContent, setSurahContent] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
   const audioRef = useRef(null);
@@ -72,13 +67,6 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
 
   const currentSurahMeta = SURAHS.find((s) => s.number === selectedSurah) || SURAHS[0];
 
-  const filteredSurahs = SURAHS.filter(
-    (s) =>
-      s.name.includes(searchQuery.trim()) ||
-      s.englishName.toLowerCase().includes(searchQuery.trim().toLowerCase()) ||
-      String(s.number).includes(searchQuery.trim())
-  );
-
   const toggleAudio = () => {
     if (!audioRef.current) {
       const audioUrl = `https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/${selectedSurah}.mp3`;
@@ -114,7 +102,6 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
     }
   };
 
-  // Dynamic Theme Palette for reducing eye strain
   const themeStyles = {
     normal: {
       modalBg: 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100',
@@ -127,7 +114,6 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
       subText: 'text-slate-500 dark:text-slate-400',
     },
     night: {
-      // Warm OLED obsidian deep night mode with soft amber/gold contrast
       modalBg: 'bg-[#0a0d14] border-slate-800 text-[#e2e8f0]',
       headerBg: 'bg-[#0f1523] border-slate-800/90',
       ayahBg: 'hover:bg-[#131b2e]',
@@ -138,7 +124,6 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
       subText: 'text-slate-400',
     },
     sepia: {
-      // Warm desert parchment eye protection
       modalBg: 'bg-[#fbf7ee] border-[#e8dfc8] text-[#3e3427]',
       headerBg: 'bg-[#f4ecdb] border-[#e2d5bc]',
       ayahBg: 'hover:bg-[#f6efe1]',
@@ -197,7 +182,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
             <button
               type="button"
               onClick={toggleAudio}
-              className={`p-2 rounded-2xl flex items-center gap-1.5 text-xs font-bold transition-all border ${
+              className={`p-2 rounded-2xl flex items-center gap-1.5 text-xs font-bold transition-all border cursor-pointer ${
                 audioPlaying
                   ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm animate-pulse'
                   : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
@@ -219,7 +204,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
             <button
               type="button"
               onClick={onClose}
-              className="w-9 h-9 rounded-full bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current flex items-center justify-center shrink-0"
+              className="w-9 h-9 rounded-full bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current flex items-center justify-center shrink-0 cursor-pointer"
               title="إغلاق"
             >
               <X className="w-5 h-5" />
@@ -235,7 +220,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
               type="button"
               disabled={selectedSurah <= 1}
               onClick={handlePrevSurah}
-              className="p-1.5 rounded-lg opacity-70 hover:opacity-100 disabled:opacity-30"
+              className="p-1.5 rounded-lg opacity-70 hover:opacity-100 disabled:opacity-30 cursor-pointer"
               title="السورة السابقة"
             >
               <ChevronRight className="w-5 h-5" />
@@ -255,7 +240,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
               type="button"
               disabled={selectedSurah >= 114}
               onClick={handleNextSurah}
-              className="p-1.5 rounded-lg opacity-70 hover:opacity-100 disabled:opacity-30"
+              className="p-1.5 rounded-lg opacity-70 hover:opacity-100 disabled:opacity-30 cursor-pointer"
               title="السورة التالية"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -269,7 +254,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
               <button
                 type="button"
                 onClick={() => setReaderTheme('night')}
-                className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
+                className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
                   readerTheme === 'night'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'opacity-60 hover:opacity-100'
@@ -282,7 +267,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
               <button
                 type="button"
                 onClick={() => setReaderTheme('sepia')}
-                className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
+                className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
                   readerTheme === 'sepia'
                     ? 'bg-[#d6c5a3] text-[#2c2214] font-black shadow-xs'
                     : 'opacity-60 hover:opacity-100'
@@ -295,7 +280,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
               <button
                 type="button"
                 onClick={() => setReaderTheme('normal')}
-                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   readerTheme === 'normal'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'opacity-60 hover:opacity-100'
@@ -314,7 +299,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
                   key={sz}
                   type="button"
                   onClick={() => setFontSize(sz)}
-                  className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
+                  className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
                     fontSize === sz
                       ? 'bg-emerald-600 text-white shadow-2xs'
                       : 'opacity-60 hover:opacity-100'
@@ -354,7 +339,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
                   <span>آياتها: {currentSurahMeta.ayahsCount}</span>
                 </div>
 
-                {/* Basmalah for all except Surah 1 (which has basmalah as Ayah 1) and Surah 9 (At-Tawbah) */}
+                {/* Basmalah for all except Surah 1 and Surah 9 */}
                 {selectedSurah !== 1 && selectedSurah !== 9 && (
                   <div className="pt-3">
                     <p className={`text-xl sm:text-2xl font-bold font-serif ${themeStyles.bismillahColor}`}>
@@ -399,7 +384,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
                   onLogPagesRead(currentSurahMeta);
                   onClose();
                 }}
-                className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
+                className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 <span>تسجيل قراءة هذه السورة في الورد</span>
@@ -409,9 +394,9 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
             <button
               type="button"
               onClick={onClose}
-              className="py-2.5 px-5 bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current font-bold text-xs rounded-xl transition-all"
+              className="py-2.5 px-5 bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current font-bold text-xs rounded-xl transition-all cursor-pointer"
             >
-              إغلاق المصحف
+              إلغاء وإغلاق المصحف
             </button>
           </div>
         </div>

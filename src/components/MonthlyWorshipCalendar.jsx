@@ -5,11 +5,6 @@ import {
   Calendar as CalendarIcon,
   Moon,
   CheckCircle2,
-  XCircle,
-  Users,
-  User,
-  Info,
-  Flame,
 } from 'lucide-react';
 import { formatArabicDate, getTodayDateString } from '../lib/dates.js';
 
@@ -161,7 +156,7 @@ export function MonthlyWorshipCalendar({
           <button
             type="button"
             onClick={() => setViewMode('prayers')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               viewMode === 'prayers'
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -172,7 +167,7 @@ export function MonthlyWorshipCalendar({
           <button
             type="button"
             onClick={() => setViewMode('fasting')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               viewMode === 'fasting'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -191,7 +186,7 @@ export function MonthlyWorshipCalendar({
           <button
             type="button"
             onClick={nextMonth}
-            className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all"
+            className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
             title="الشهر التالي"
           >
             <ChevronRight className="w-4 h-4" />
@@ -204,7 +199,7 @@ export function MonthlyWorshipCalendar({
           <button
             type="button"
             onClick={prevMonth}
-            className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all"
+            className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all cursor-pointer"
             title="الشهر السابق"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -213,7 +208,7 @@ export function MonthlyWorshipCalendar({
           <button
             type="button"
             onClick={resetToTodayMonth}
-            className="ms-2 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 rounded-lg border border-emerald-200 dark:border-emerald-800 transition-all"
+            className="ms-2 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 rounded-lg border border-emerald-200 dark:border-emerald-800 transition-all cursor-pointer"
           >
             الشهر الحالي
           </button>
@@ -334,7 +329,7 @@ export function MonthlyWorshipCalendar({
                             onToggleFasting(d.dateStr, false);
                           }
                         }}
-                        className="w-full text-[10px] text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                        className="w-full text-[10px] text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 font-medium py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
                       >
                         + تسجيل
                       </button>
@@ -399,7 +394,7 @@ export function MonthlyWorshipCalendar({
               <button
                 type="button"
                 onClick={() => setSelectedDayDetail(null)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"
               >
                 ✕
               </button>
@@ -428,7 +423,7 @@ export function MonthlyWorshipCalendar({
                     onToggleFasting(selectedDayDetail.dateStr, selectedDayDetail.isFasting);
                     setSelectedDayDetail(null);
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     selectedDayDetail.isFasting
                       ? 'bg-red-50 text-red-700 hover:bg-red-100 border border-red-200'
                       : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs'
@@ -515,7 +510,7 @@ export function MonthlyWorshipCalendar({
                     onSelectDate(selectedDayDetail.dateStr);
                     setSelectedDayDetail(null);
                   }}
-                  className="w-full py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition-all"
+                  className="w-full py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition-all cursor-pointer"
                 >
                   الانتقال لتسجيل أنشطة هذا اليوم في الصفحة الرئيسية
                 </button>

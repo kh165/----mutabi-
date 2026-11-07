@@ -1,18 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   RotateCcw,
-  Heart,
   Volume2,
   VolumeX,
   Check,
   ChevronDown,
   Save,
-  BookOpen,
   SunMedium,
   Moon,
-  Flame,
-  Award,
 } from 'lucide-react';
 import { AdhkarReaderModal } from './AdhkarReaderModal.jsx';
 
@@ -40,7 +36,13 @@ const TARGETS = [
   { value: 0, label: 'مفتوح (تسبيح حر)' },
 ];
 
-export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
+export function TasbeehCounter({
+  todayStr,
+  onSaveCount,
+  onCountChange,
+  initialCount = 0,
+  initialCounterState = null,
+}) {
   const [selectedDhikr, setSelectedDhikr] = useState(COMPREHENSIVE_DHIKR_LIST[0]);
   const [target, setTarget] = useState(33);
   const [count, setCount] = useState(0);
@@ -52,39 +54,58 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
   const [showDhikrMenu, setShowDhikrMenu] = useState(false);
   const [savingSync, setSavingSync] = useState(false);
   const [syncedSuccess, setSyncedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   const [adhkarModalOpen, setAdhkarModalOpen] = useState(false);
   const [adhkarModalCategory, setAdhkarModalCategory] = useState('morning');
+  const saveQueueRef = useRef(Promise.resolve());
+  const counterTouchedRef = useRef(false);
+  const counterDateRef = useRef(todayStr);
 
-  // Load saved counter from localStorage for the current day
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`mutabi_tasbeeh_${todayStr || 'today'}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setCount(Number(parsed.count) || 0);
-        setLaps(Number(parsed.laps) || 0);
-        setDailyTotal(Number(parsed.dailyTotal) || initialCount || 0);
+    if (counterDateRef.current !== todayStr) {
+      counterDateRef.current = todayStr;
+      counterTouchedRef.current = false;
+    }
+    if (counterTouchedRef.current) return;
+
+    const savedTarget = initialCounterState?.target;
+    const initialTarget = TARGETS.some((option) => option.value === savedTarget)
+      ? savedTarget
+      : 33;
+    setTarget(initialTarget);
+    const total = Number(initialCount) || 0;
+    setDailyTotal(total);
+    if (initialCounterState) {
+      setCount(Number(initialCounterState.count) || 0);
+      setLaps(Number(initialCounterState.laps) || 0);
+    } else if (initialTarget > 0) {
+      setCount(total % initialTarget);
+      setLaps(Math.floor(total / initialTarget));
+    } else {
+      setCount(total);
+      setLaps(0);
+    }
+  }, [todayStr, initialCount, initialCounterState]);
+
+  const queueCountSave = (total, title, counterState) => {
+    if (!onCountChange) return Promise.resolve();
+
+    const save = saveQueueRef.current.then(
+      () => onCountChange(total, title, counterState),
+      () => onCountChange(total, title, counterState)
+    );
+    saveQueueRef.current = save.then(
+      () => setSaveError(null),
+      (error) => {
+        console.error('Failed to save tasbeeh progress:', error);
+        setSaveError('تعذر حفظ التسبيح في قاعدة البيانات. تحقق من الاتصال ثم أعد المحاولة.');
       }
-    } catch {
-      // ignore
-    }
-  }, [todayStr]);
+    );
+    return saveQueueRef.current;
+  };
 
-  // Save to localStorage whenever state changes
-  useEffect(() => {
-    try {
-      localStorage.setItem(
-        `mutabi_tasbeeh_${todayStr || 'today'}`,
-        JSON.stringify({ count, laps, dailyTotal })
-      );
-    } catch {
-      // ignore
-    }
-  }, [count, laps, dailyTotal, todayStr]);
-
-  // Subtle web audio synthesizer click sound
   const playClickSound = () => {
-    if (!soundEnabled) return;
+    if (!soundEnabled || typeof window === 'undefined') return;
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
@@ -101,13 +122,14 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
       osc.start();
       osc.stop(ctx.currentTime + 0.04);
     } catch {
-      // audio error safely caught
+      // ignore
     }
   };
 
   const handleTap = () => {
+    counterTouchedRef.current = true;
     playClickSound();
-    if (navigator.vibrate) {
+    if (typeof window !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
     }
 
@@ -117,7 +139,13 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
 
     if (target > 0 && nextCount >= target) {
       setCount(0);
-      setLaps((prev) => prev + 1);
+      const nextLaps = laps + 1;
+      setLaps(nextLaps);
+      void queueCountSave(nextDaily, currentDhikrTitle, {
+        count: 0,
+        laps: nextLaps,
+        target,
+      });
       confetti({
         particleCount: 40,
         spread: 55,
@@ -126,33 +154,43 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
       });
     } else {
       setCount(nextCount);
+      void queueCountSave(nextDaily, currentDhikrTitle, {
+        count: nextCount,
+        laps,
+        target,
+      });
     }
   };
 
-  // Immediate Reset of the current round (no blocking confirm that breaks in iFrames)
   const handleResetLap = () => {
+    counterTouchedRef.current = true;
     setCount(0);
     setLaps(0);
-    if (navigator.vibrate) navigator.vibrate(10);
+    void queueCountSave(dailyTotal, currentDhikrTitle, { count: 0, laps: 0, target });
+    if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(10);
   };
 
-  // Complete reset of daily total
   const handleResetDaily = () => {
+    counterTouchedRef.current = true;
     setCount(0);
     setLaps(0);
     setDailyTotal(0);
-    if (onSaveCount) {
-      onSaveCount(0, selectedDhikr.title);
-    }
+    void queueCountSave(0, currentDhikrTitle, { count: 0, laps: 0, target });
   };
 
   const handleSaveToLog = async () => {
     if (!onSaveCount) return;
+    counterTouchedRef.current = true;
     setSavingSync(true);
     try {
-      await onSaveCount(dailyTotal, currentDhikrTitle);
+      await saveQueueRef.current;
+      await onSaveCount(dailyTotal, currentDhikrTitle, { count, laps, target });
       setSyncedSuccess(true);
       setTimeout(() => setSyncedSuccess(false), 3000);
+      setSaveError(null);
+    } catch (error) {
+      console.error('Failed to save tasbeeh progress:', error);
+      setSaveError('تعذر حفظ التسبيح في قاعدة البيانات. تحقق من الاتصال ثم أعد المحاولة.');
     } finally {
       setSavingSync(false);
     }
@@ -162,7 +200,13 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
 
   return (
     <div className="space-y-6 text-right">
-      {/* Top Banner: Adhkar Quick Access (أذكار الصباح والمساء) */}
+      {saveError && (
+        <div className="p-3 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-xs text-red-700 dark:text-red-300">
+          {saveError}
+        </div>
+      )}
+
+      {/* Top Banner: Adhkar Quick Access */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         {/* Morning Adhkar Button */}
         <div
@@ -190,7 +234,7 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
           </div>
           <button
             type="button"
-            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-2xs whitespace-nowrap"
+            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-2xs whitespace-nowrap cursor-pointer"
           >
             فتح وقراءة
           </button>
@@ -222,7 +266,7 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
           </div>
           <button
             type="button"
-            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-2xs whitespace-nowrap"
+            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-2xs whitespace-nowrap cursor-pointer"
           >
             فتح وقراءة
           </button>
@@ -258,7 +302,7 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
             <button
               type="button"
               onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
+              className={`p-2 sm:px-3 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border cursor-pointer ${
                 soundEnabled
                   ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700'
@@ -269,11 +313,10 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
               <span className="text-[11px]">{soundEnabled ? 'صوت' : 'صامت'}</span>
             </button>
 
-            {/* Direct Lap Reset Button (Works 100% reliably) */}
             <button
               type="button"
               onClick={handleResetLap}
-              className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-all"
+              className="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
               title="تصفير الدورة الحالية"
             >
               <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
@@ -290,7 +333,7 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
           <button
             type="button"
             onClick={() => setShowDhikrMenu(!showDhikrMenu)}
-            className="w-full p-4 bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 rounded-2xl flex items-center justify-between gap-3 text-right transition-all shadow-2xs"
+            className="w-full p-4 bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 rounded-2xl flex items-center justify-between gap-3 text-right transition-all shadow-2xs cursor-pointer"
           >
             <div className="min-w-0 flex-1">
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 block mb-0.5">
@@ -321,7 +364,7 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
                       setIsCustom(false);
                       setShowDhikrMenu(false);
                     }}
-                    className={`w-full p-3 rounded-xl text-right transition-all flex items-center justify-between gap-3 ${
+                    className={`w-full p-3 rounded-xl text-right transition-all flex items-center justify-between gap-3 cursor-pointer ${
                       selectedDhikr.id === d.id && !isCustom
                         ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 font-bold border border-emerald-300 dark:border-emerald-800'
                         : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200'
@@ -356,7 +399,7 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
                     <button
                       type="button"
                       onClick={() => setShowDhikrMenu(false)}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold"
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold cursor-pointer"
                     >
                       تأكيد
                     </button>
@@ -380,7 +423,7 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
                 setTarget(t.value);
                 setCount(0);
               }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 target === t.value
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -398,15 +441,12 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
             onClick={handleTap}
             className="group relative w-56 h-56 sm:w-64 sm:h-64 rounded-full bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white shadow-2xl shadow-emerald-700/40 hover:scale-[1.02] active:scale-95 transition-all flex flex-col items-center justify-center p-4 focus:outline-none focus:ring-8 focus:ring-emerald-400/30 cursor-pointer"
           >
-            {/* Outer dotted accent ring */}
             <div className="absolute inset-2 rounded-full border-2 border-dashed border-emerald-300/40 pointer-events-none" />
 
-            {/* Current Counter Number */}
             <span className="text-6xl sm:text-7xl font-black tracking-tight drop-shadow-md font-sans">
               {count}
             </span>
 
-            {/* Target and helper text */}
             <span className="text-xs sm:text-sm font-bold text-emerald-100/90 mt-1">
               {target > 0 ? `من ${target}` : 'تسبيح حر مفتوح'}
             </span>
@@ -419,7 +459,6 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
 
         {/* Counter Summary Bar & Action Buttons */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-          {/* Laps */}
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 text-center">
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-semibold">
               الدورات المكتملة
@@ -429,7 +468,6 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
             </span>
           </div>
 
-          {/* Daily Total */}
           <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 text-center">
             <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-semibold">
               مجموع تسبيحات اليوم
@@ -439,12 +477,11 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
             </span>
           </div>
 
-          {/* Reset All Daily Total Button (Reliable action) */}
           <div className="flex items-center">
             <button
               type="button"
               onClick={handleResetDaily}
-              className="w-full py-3 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 text-xs font-bold rounded-2xl transition-all border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5"
+              className="w-full py-3 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 text-xs font-bold rounded-2xl transition-all border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
               title="تصفير مجموع تسبيحات اليوم"
             >
               <RotateCcw className="w-3.5 h-3.5" />
@@ -452,13 +489,12 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
             </button>
           </div>
 
-          {/* Save to Log Button */}
           <div className="flex items-center">
             <button
               type="button"
               disabled={savingSync || dailyTotal === 0}
               onClick={handleSaveToLog}
-              className="w-full py-3 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-40"
+              className="w-full py-3 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 cursor-pointer"
               title="حفظ التسبيح في سجل إنجازات اليوم في قاعدة البيانات"
             >
               {syncedSuccess ? (
@@ -482,10 +518,9 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
         isOpen={adhkarModalOpen}
         onClose={() => setAdhkarModalOpen(false)}
         initialCategory={adhkarModalCategory}
+        todayStr={todayStr}
         onCompleteCategory={(catTitle) => {
-          if (onSaveCount) {
-            onSaveCount(1, catTitle);
-          }
+          return onSaveCount ? onSaveCount(1, catTitle) : undefined;
         }}
       />
     </div>

@@ -5,6 +5,7 @@ import { useActivities } from '../hooks/useActivities.js';
 import { useLogs } from '../hooks/useLogs.js';
 import { useEncouragements } from '../hooks/useEncouragements.js';
 import { ActivityCard } from '../components/ActivityCard.jsx';
+import { PrayersTrackerCard } from '../components/PrayersTrackerCard.jsx';
 import { ProgressRing } from '../components/ProgressRing.jsx';
 import { MonthlyWorshipCalendar } from '../components/MonthlyWorshipCalendar.jsx';
 import { QuranReaderModal } from '../components/QuranReaderModal.jsx';
@@ -21,12 +22,7 @@ import {
   CalendarDays,
   ListTodo,
   BookOpen,
-  Moon,
   SunMedium,
-  Video,
-  Clock,
-  ArrowUpRight,
-  Filter,
 } from 'lucide-react';
 
 export function Today({ onNavigateToTasbeeh }) {
@@ -64,6 +60,13 @@ export function Today({ onNavigateToTasbeeh }) {
   const dateLogs = logs.filter((l) => l.date === selectedDate);
   const logsMap = new Map(dateLogs.map((l) => [l.activityId, l]));
 
+  // Find the prayer activity if present
+  const prayerActivity = activities.find(
+    (a) => a.type === 'prayers' || a.id === 'prayers' || a.title.includes('الصلوات الخمس')
+  );
+  const prayerActivityId = prayerActivity ? prayerActivity.id : 'prayers';
+  const prayerLog = logsMap.get(prayerActivityId) || logsMap.get('prayers');
+
   // Calculate day completion
   const totalActivities = activities.length;
   const completedCount = activities.filter((a) => {
@@ -73,7 +76,6 @@ export function Today({ onNavigateToTasbeeh }) {
 
   const dayPercentage =
     totalActivities > 0 ? Math.round((completedCount / totalActivities) * 100) : 0;
-  const allCompleted = totalActivities > 0 && completedCount === totalActivities;
 
   const khatmaStats = calculateKhatma(logs, activities);
   const latestPosition = getLatestMemorizedPosition(logs);
@@ -133,15 +135,50 @@ export function Today({ onNavigateToTasbeeh }) {
     }
   };
 
+  // Specific handler for saving a prayer with user stats update in Realtime Database
+  const handleSavePrayer = async (actId, dStr, performedCount, isCompleted, details, note) => {
+    try {
+      // 1. Save prayer log directly in Realtime Database
+      await saveLog(actId, dStr, performedCount, isCompleted, details, note);
+
+      // 2. Update user status in Realtime Database (today's prayer count & last active prayer)
+      if (updateUserDoc) {
+        await updateUserDoc({
+          lastPrayerUpdate: {
+            date: dStr,
+            performedCount,
+            isCompleted,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      if (details?.lastUpdatedPrayer && details?.lastUpdatedStatus) {
+        handleAchievement(`${details.lastUpdatedPrayer}`);
+      }
+    } catch (err) {
+      console.error('Failed to save prayer to Realtime Database:', err);
+      throw err;
+    }
+  };
+
   // Filter activities based on the selected category tab
-  const filteredActivities = activities.filter((act) => {
-    const isDone = !!logsMap.get(act.id)?.completed;
-    if (categoryFilter === 'remaining') return !isDone;
-    if (categoryFilter === 'prayers') return act.type === 'prayers' || act.title.includes('صلاة') || act.title.includes('صلوات');
-    if (categoryFilter === 'quran') return act.type === 'read' || act.type === 'memorize' || act.title.includes('قرآن') || act.type === 'listen';
-    if (categoryFilter === 'adhkar') return act.title.includes('أذكار') || act.title.includes('تسبيح') || act.title.includes('صيام');
-    return true;
-  });
+  // If prayers tab is selected or all is selected, we can render the dedicated PrayersTrackerCard
+  const filteredActivities = activities
+    .filter((act) => {
+      // Don't duplicate prayers card in the grid if dedicated card is shown
+      if (act.type === 'prayers' || act.id === 'prayers') {
+        return false;
+      }
+      const isDone = !!logsMap.get(act.id)?.completed;
+      if (categoryFilter === 'remaining') return !isDone;
+      if (categoryFilter === 'prayers') return false; // Handled by PrayersTrackerCard
+      if (categoryFilter === 'quran') return act.type === 'read' || act.type === 'memorize' || act.title.includes('قرآن') || act.type === 'listen';
+      if (categoryFilter === 'adhkar') return act.title.includes('أذكار') || act.title.includes('تسبيح') || act.title.includes('صيام');
+      return true;
+    });
+
+  const shouldShowPrayersCard = categoryFilter === 'all' || categoryFilter === 'prayers';
 
   return (
     <div className="space-y-6 text-right">
@@ -168,7 +205,7 @@ export function Today({ onNavigateToTasbeeh }) {
             <button
               type="button"
               onClick={() => setEncouragementBanner(null)}
-              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center shrink-0"
+              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center shrink-0 cursor-pointer"
               title="إغلاق"
             >
               <X className="w-4 h-4" />
@@ -177,9 +214,8 @@ export function Today({ onNavigateToTasbeeh }) {
         </div>
       )}
 
-      {/* Hero Spiritual Greeting & Progress Dashboard ("يخطف المستخدم أول ما يدخل") */}
+      {/* Hero Spiritual Greeting & Progress Dashboard */}
       <div className="bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-emerald-700/40">
-        {/* Subtle Islamic Geometric Ambient Accent */}
         <div className="absolute top-0 end-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-10 -start-10 w-60 h-60 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
 
@@ -198,7 +234,7 @@ export function Today({ onNavigateToTasbeeh }) {
               «أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ» • استمر في المحافظة على وردك اليومي، واجعل كل خطوة لك اليوم بركة وقربة.
             </p>
 
-            {/* Quick Launchpad Buttons (أركان العبادة السريعة) */}
+            {/* Quick Launchpad Buttons */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
               {/* Quran Reader */}
               <button
@@ -299,7 +335,7 @@ export function Today({ onNavigateToTasbeeh }) {
           <button
             type="button"
             onClick={() => setActiveMainView('daily')}
-            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
               activeMainView === 'daily'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -311,7 +347,7 @@ export function Today({ onNavigateToTasbeeh }) {
           <button
             type="button"
             onClick={() => setActiveMainView('calendar')}
-            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
               activeMainView === 'calendar'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -330,6 +366,10 @@ export function Today({ onNavigateToTasbeeh }) {
             logs={logs}
             activities={activities}
             onToggleFasting={handleToggleFasting}
+            onSelectDate={(targetDate) => {
+              setSelectedDate(targetDate);
+              setActiveMainView('daily');
+            }}
           />
         </div>
       ) : (
@@ -353,7 +393,7 @@ export function Today({ onNavigateToTasbeeh }) {
                     key={d.date}
                     type="button"
                     onClick={() => setSelectedDate(d.date)}
-                    className={`flex-1 min-w-[70px] sm:min-w-[80px] py-2 sm:py-2.5 px-2 rounded-2xl flex flex-col items-center gap-0.5 sm:gap-1 transition-all text-center ${
+                    className={`flex-1 min-w-[70px] sm:min-w-[80px] py-2 sm:py-2.5 px-2 rounded-2xl flex flex-col items-center gap-0.5 sm:gap-1 transition-all text-center cursor-pointer ${
                       isSelected
                         ? 'bg-emerald-600 text-white shadow-sm font-bold'
                         : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium'
@@ -374,13 +414,24 @@ export function Today({ onNavigateToTasbeeh }) {
             </div>
           </div>
 
-          {/* Activities Filter Tabs (تنظيم واضح ومفهوم) */}
+          {/* DEDICATED 5 PRAYERS TRACKER CARD */}
+          {shouldShowPrayersCard && (
+            <PrayersTrackerCard
+              log={prayerLog}
+              dateStr={selectedDate}
+              prayerActivityId={prayerActivityId}
+              onSavePrayer={handleSavePrayer}
+              onResetAllPrayers={resetLog}
+            />
+          )}
+
+          {/* Activities Filter Tabs */}
           <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl text-xs font-bold shrink-0">
               <button
                 type="button"
                 onClick={() => setCategoryFilter('all')}
-                className={`py-1.5 px-3 rounded-xl transition-all ${
+                className={`py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
                   categoryFilter === 'all'
                     ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
                     : 'text-slate-600 dark:text-slate-300'
@@ -391,7 +442,7 @@ export function Today({ onNavigateToTasbeeh }) {
               <button
                 type="button"
                 onClick={() => setCategoryFilter('prayers')}
-                className={`py-1.5 px-3 rounded-xl transition-all ${
+                className={`py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
                   categoryFilter === 'prayers'
                     ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
                     : 'text-slate-600 dark:text-slate-300'
@@ -402,7 +453,7 @@ export function Today({ onNavigateToTasbeeh }) {
               <button
                 type="button"
                 onClick={() => setCategoryFilter('quran')}
-                className={`py-1.5 px-3 rounded-xl transition-all ${
+                className={`py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
                   categoryFilter === 'quran'
                     ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
                     : 'text-slate-600 dark:text-slate-300'
@@ -413,7 +464,7 @@ export function Today({ onNavigateToTasbeeh }) {
               <button
                 type="button"
                 onClick={() => setCategoryFilter('adhkar')}
-                className={`py-1.5 px-3 rounded-xl transition-all ${
+                className={`py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
                   categoryFilter === 'adhkar'
                     ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
                     : 'text-slate-600 dark:text-slate-300'
@@ -424,13 +475,13 @@ export function Today({ onNavigateToTasbeeh }) {
               <button
                 type="button"
                 onClick={() => setCategoryFilter('remaining')}
-                className={`py-1.5 px-3 rounded-xl transition-all ${
+                className={`py-1.5 px-3 rounded-xl transition-all cursor-pointer ${
                   categoryFilter === 'remaining'
                     ? 'bg-amber-500 text-white shadow-2xs font-black'
                     : 'text-amber-700 dark:text-amber-400'
                 }`}
               >
-                المتبقي لليوم ({totalActivities - completedCount})
+                المتبقي لليوم ({Math.max(0, totalActivities - completedCount)})
               </button>
             </div>
           </div>
@@ -453,16 +504,16 @@ export function Today({ onNavigateToTasbeeh }) {
                     type="button"
                     disabled={seeding}
                     onClick={handleSeed}
-                    className="mt-2 py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"
+                    className="mt-2 py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5 cursor-pointer"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>{seeding ? 'جارٍ التهيئة...' : 'تهيئة باقة الأنشطة المقترحة'}</span>
                   </button>
                 )}
               </div>
-            ) : filteredActivities.length === 0 ? (
+            ) : filteredActivities.length === 0 && categoryFilter !== 'prayers' ? (
               <div className="p-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl text-xs text-slate-500">
-                لا توجد عبادات تطابق هذا التبويب المحدد حالياً.
+                لا توجد عبادات أخرى تطابق هذا التبويب المحدد حالياً.
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">

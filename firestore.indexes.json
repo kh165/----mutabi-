@@ -26,6 +26,14 @@
       ]
     },
     {
+      "collectionGroup": "itemProgress",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "activityId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "activities",
       "queryScope": "COLLECTION",
       "fields": [

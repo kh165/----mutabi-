@@ -8,47 +8,28 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase.js';
+} from '../firebase.js';
+import { db, handleDatabaseError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
-
-function getLocalLogsCache(uid) {
-  if (!uid) return [];
-  try {
-    const raw = localStorage.getItem(`mutabi_logs_cache_${uid}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setLocalLogsCache(uid, items) {
-  if (!uid) return;
-  try {
-    localStorage.setItem(`mutabi_logs_cache_${uid}`, JSON.stringify(items));
-  } catch {}
-}
 
 export function useLogs(targetUid) {
   const { user } = useAuth();
   const effectiveUid = targetUid || user?.uid;
-  const [logs, setLogs] = useState(() => getLocalLogsCache(effectiveUid));
-  const [loading, setLoading] = useState(!getLocalLogsCache(effectiveUid).length);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(!!effectiveUid);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!effectiveUid) {
       setLogs([]);
       setLoading(false);
+      setError(null);
       return;
     }
 
-    // Pre-populate from local cache immediately
-    const cached = getLocalLogsCache(effectiveUid);
-    if (cached.length > 0) {
-      setLogs(cached);
-      setLoading(false);
-    }
-
+    setLogs([]);
+    setLoading(true);
+    setError(null);
     const q = query(collection(db, 'logs'), where('uid', '==', effectiveUid));
     const unsubscribe = onSnapshot(
       q,
@@ -58,11 +39,12 @@ export function useLogs(targetUid) {
           items.push({ id: docSnap.id, ...docSnap.data() });
         });
         setLogs(items);
-        setLocalLogsCache(effectiveUid, items);
+        setError(null);
         setLoading(false);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'logs');
+        handleDatabaseError(error, OperationType.LIST, 'logs');
+        setError(error);
         setLoading(false);
       }
     );
@@ -86,35 +68,16 @@ export function useLogs(targetUid) {
         updatedAt: new Date().toISOString(),
       };
 
-      // 1. Instant Optimistic State & Local Cache Update (0ms delay)
-      setLogs((prev) => {
-        const existingIdx = prev.findIndex((l) => l.id === logId);
-        let updated;
-        if (existingIdx >= 0) {
-          updated = [...prev];
-          updated[existingIdx] = { ...updated[existingIdx], ...logData };
-        } else {
-          updated = [logData, ...prev];
-        }
-        setLocalLogsCache(effectiveUid, updated);
-        return updated;
-      });
-
-      // 2. Persist to Firestore asynchronously
       try {
         const ref = doc(db, 'logs', logId);
-        await setDoc(
-          ref,
-          {
-            ...logData,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+        await setDoc(ref, {
+          ...logData,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
         return logData;
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `logs/${logId}`);
+        handleDatabaseError(err, OperationType.WRITE, `logs/${logId}`);
         throw err;
       }
     },
@@ -123,18 +86,10 @@ export function useLogs(targetUid) {
 
   const deleteLog = useCallback(
     async (logId) => {
-      // 1. Optimistic delete
-      setLogs((prev) => {
-        const updated = prev.filter((l) => l.id !== logId);
-        setLocalLogsCache(effectiveUid, updated);
-        return updated;
-      });
-
-      // 2. Delete from Firestore
       try {
         await deleteDoc(doc(db, 'logs', logId));
       } catch (err) {
-        handleFirestoreError(err, OperationType.DELETE, `logs/${logId}`);
+        handleDatabaseError(err, OperationType.DELETE, `logs/${logId}`);
         throw err;
       }
     },
@@ -150,5 +105,5 @@ export function useLogs(targetUid) {
     [effectiveUid, deleteLog]
   );
 
-  return { logs, loading, saveLog, deleteLog, resetLog };
+  return { logs, loading, error, saveLog, deleteLog, resetLog };
 }

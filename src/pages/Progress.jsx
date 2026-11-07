@@ -20,7 +20,6 @@ import {
   CheckCircle,
   Sprout,
   Target,
-  CircleDot,
 } from 'lucide-react';
 import { TOTAL_PAGES } from '../data/quran.js';
 

@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
-import {VitePWA} from 'vite-plugin-pwa';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
@@ -54,28 +54,25 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 30 * 1024 * 1024, // 30MB for full scripture & audio assets
+          importScripts: ['/notification-handler.js'],
+          maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json,txt}'],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/__/],
           runtimeCaching: [
             {
-              // Quran API (alquran.cloud) - CacheFirst for 100% offline Holy Quran reading
               urlPattern: /^https:\/\/api\.alquran\.cloud\/.*/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'quran-cloud-api-cache',
                 expiration: {
                   maxEntries: 300,
-                  maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                  maxAgeSeconds: 60 * 60 * 24 * 365,
                 },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheableResponse: { statuses: [0, 200] },
               },
             },
             {
-              // Quran.com API v4 - Secondary scripture mirror
               urlPattern: /^https:\/\/api\.quran\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
@@ -84,13 +81,10 @@ export default defineConfig(() => {
                   maxEntries: 300,
                   maxAgeSeconds: 60 * 60 * 24 * 365,
                 },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheableResponse: { statuses: [0, 200] },
               },
             },
             {
-              // Islamic Network CDN (Recitations, Quranic calligraphy & Audio)
               urlPattern: /^https:\/\/cdn\.islamic\.network\/.*/i,
               handler: 'CacheFirst',
               options: {
@@ -99,13 +93,10 @@ export default defineConfig(() => {
                   maxEntries: 120,
                   maxAgeSeconds: 60 * 60 * 24 * 180,
                 },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheableResponse: { statuses: [0, 200] },
               },
             },
             {
-              // EveryAyah Audio recitations
               urlPattern: /^https:\/\/(?:www\.)?everyayah\.com\/.*/i,
               handler: 'CacheFirst',
               options: {
@@ -114,9 +105,7 @@ export default defineConfig(() => {
                   maxEntries: 200,
                   maxAgeSeconds: 60 * 60 * 24 * 180,
                 },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheableResponse: { statuses: [0, 200] },
               },
             },
             {
@@ -128,9 +117,7 @@ export default defineConfig(() => {
                   maxEntries: 10,
                   maxAgeSeconds: 60 * 60 * 24 * 365,
                 },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheableResponse: { statuses: [0, 200] },
               },
             },
             {
@@ -142,9 +129,7 @@ export default defineConfig(() => {
                   maxEntries: 20,
                   maxAgeSeconds: 60 * 60 * 24 * 365,
                 },
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
+                cacheableResponse: { statuses: [0, 200] },
               },
             },
           ],

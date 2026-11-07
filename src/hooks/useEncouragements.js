@@ -7,8 +7,8 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
-} from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../firebase.js';
+} from '../firebase.js';
+import { db, handleDatabaseError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export const DEFAULT_ENCOURAGEMENTS = [
@@ -42,7 +42,7 @@ export function useEncouragements() {
         setLoading(false);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.LIST, 'encouragements');
+        handleDatabaseError(error, OperationType.LIST, 'encouragements');
         setLoading(false);
       }
     );
@@ -58,7 +58,7 @@ export function useEncouragements() {
         createdAt: serverTimestamp(),
       });
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'encouragements');
+      handleDatabaseError(err, OperationType.CREATE, 'encouragements');
       throw err;
     }
   };
@@ -67,7 +67,7 @@ export function useEncouragements() {
     try {
       await deleteDoc(doc(db, 'encouragements', id));
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `encouragements/${id}`);
+      handleDatabaseError(err, OperationType.DELETE, `encouragements/${id}`);
       throw err;
     }
   };

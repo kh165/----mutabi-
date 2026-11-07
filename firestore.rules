@@ -2,11 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ---------- Global Catch-All Deny ----------
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // ---------- Helper Functions ----------
     function signedIn() { 
       return request.auth != null; 
@@ -16,11 +11,18 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid; 
     }
     
-    function isAdmin() {
+    function isRootAdminEmail() {
       return signedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'khalid.niletechno@gmail.com' ||
         request.auth.token.email == 'khalidsalah9444@gmail.com' ||
         request.auth.token.email == 'khalidsalah948@gmail.com'
+      );
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        isRootAdminEmail() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
       );
     }
     
@@ -33,13 +35,16 @@ service cloud.firestore {
       return request.resource.data.get(field, null) == resource.data.get(field, null);
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.:]+$');
+    // ---------- test connection ----------
+    match /test/{docId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // ---------- users ----------
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
       allow create: if isOwner(uid) 
                     && request.resource.data.get('isDisabled', false) == false
                     && request.resource.data.displayName is string
@@ -54,17 +59,17 @@ service cloud.firestore {
     // ---------- admins ----------
     match /admins/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if (isOwner(uid) && (request.auth.token.email == 'khalidsalah948@gmail.com' || request.auth.token.email == 'khalidsalah9444@gmail.com')) || isAdmin();
+      allow create: if (isOwner(uid) && isRootAdminEmail()) || isAdmin();
       allow update, delete: if isAdmin();
     }
 
     // ---------- activities ----------
     match /activities/{activityId} {
-      allow read: if signedIn() && notDisabled();
+      allow read, list: if signedIn() && notDisabled();
       allow write: if isAdmin();
 
       match /items/{itemId} {
-        allow read: if signedIn() && notDisabled();
+        allow read, list: if signedIn() && notDisabled();
         allow write: if isAdmin();
       }
     }
@@ -100,15 +105,6 @@ service cloud.firestore {
       allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
     }
 
-    // ---------- mediaPlaylists ----------
-    match /mediaPlaylists/{playlistId} {
-      allow read: if signedIn() && notDisabled();
-      allow list: if signedIn() && notDisabled();
-      allow create: if signedIn() && notDisabled();
-      allow update: if (signedIn() && notDisabled() && resource.data.createdBy == request.auth.uid) || isAdmin();
-      allow delete: if (signedIn() && notDisabled() && resource.data.createdBy == request.auth.uid) || isAdmin();
-    }
-
     // ---------- notes ----------
     match /notes/{noteId} {
       allow read: if signedIn() && (resource.data.toUid == request.auth.uid || isAdmin());
@@ -120,11 +116,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ---------- encouragements (custom admin phrases shown upon achievement) ----------
+    // ---------- encouragements ----------
     match /encouragements/{quoteId} {
-      allow read: if signedIn();
-      allow list: if signedIn();
+      allow read, list: if signedIn();
       allow write: if isAdmin();
+    }
+
+    // ---------- Global Catch-All Deny ----------
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

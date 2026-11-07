@@ -3,8 +3,6 @@
  * Bundled statically for offline and zero-external-dependency reliability.
  */
 
-
-
 export const TOTAL_PAGES = 604;
 export const TOTAL_JUZ = 30;
 export const TOTAL_SURAHS = 114;
@@ -127,7 +125,7 @@ export const SURAHS = [
 ];
 
 export function getSurah(number) {
-  return SURAHS.find(s => s.number === number);
+  return SURAHS.find((s) => s.number === Number(number));
 }
 
 export function validateAyahRange(surahNumber, fromAyah, toAyah) {

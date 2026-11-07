@@ -200,7 +200,7 @@ export function PrayersInput({
                   <button
                     type="button"
                     onClick={() => setPrayerStatus(prayer.id, 'prayed_jamaah')}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all ${
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
                       isJamaah
                         ? 'bg-emerald-600 text-white shadow-2xs'
                         : 'bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 text-slate-700 dark:text-slate-300 hover:text-emerald-800'
@@ -215,7 +215,7 @@ export function PrayersInput({
                   <button
                     type="button"
                     onClick={() => setPrayerStatus(prayer.id, 'prayed_individual')}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all ${
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
                       isIndividual
                         ? 'bg-teal-600 text-white shadow-2xs'
                         : 'bg-slate-100 dark:bg-slate-800 hover:bg-teal-100 dark:hover:bg-teal-950/50 text-slate-700 dark:text-slate-300 hover:text-teal-800'
@@ -230,7 +230,7 @@ export function PrayersInput({
                   <button
                     type="button"
                     onClick={() => setPrayerStatus(prayer.id, 'missed')}
-                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all ${
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
                       isMissed
                         ? 'bg-amber-600 text-white shadow-2xs'
                         : 'bg-slate-100 dark:bg-slate-800 hover:bg-amber-100 dark:hover:bg-amber-950/50 text-slate-700 dark:text-slate-300 hover:text-amber-800'
@@ -307,7 +307,7 @@ export function PrayersInput({
           <button
             type="button"
             onClick={onReset}
-            className="px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-1.5 transition-all"
+            className="px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>إعادة التعيين</span>
@@ -317,14 +317,14 @@ export function PrayersInput({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+            className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
           >
             إلغاء
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <Check className="w-4 h-4" />
             <span>{saving ? 'جارٍ الحفظ...' : 'تأكيد وحفظ'}</span>

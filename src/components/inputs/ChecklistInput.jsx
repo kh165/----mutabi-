@@ -119,7 +119,7 @@ export function ChecklistInput({
                 <button
                   type="button"
                   onClick={() => toggleItem(item.id)}
-                  className="flex items-center gap-3 text-right flex-1 select-none"
+                  className="flex items-center gap-3 text-right flex-1 select-none cursor-pointer"
                 >
                   <div
                     className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
@@ -190,7 +190,7 @@ export function ChecklistInput({
           <button
             type="button"
             onClick={onReset}
-            className="px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-1.5 transition-all"
+            className="px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>إعادة التعيين</span>
@@ -200,14 +200,14 @@ export function ChecklistInput({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all"
+            className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all cursor-pointer"
           >
             إلغاء
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
             <Check className="w-4 h-4" />
             <span>{saving ? 'جارٍ الحفظ...' : 'حفظ الإنجاز'}</span>

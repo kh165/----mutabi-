@@ -56,7 +56,7 @@ export function WeeklyWorshipChart({ weeklyData = [], isDark = false }) {
             <button
               type="button"
               onClick={() => setChartType('bar')}
-              className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 chartType === 'bar'
                   ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
@@ -68,7 +68,7 @@ export function WeeklyWorshipChart({ weeklyData = [], isDark = false }) {
             <button
               type="button"
               onClick={() => setChartType('area')}
-              className={`p-1.5 rounded-lg text-xs font-bold transition-all ${
+              className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 chartType === 'area'
                   ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
@@ -82,7 +82,7 @@ export function WeeklyWorshipChart({ weeklyData = [], isDark = false }) {
       </div>
 
       {/* KPI mini tags */}
-      <div className="flex items-center gap-3 text-xs">
+      <div className="flex items-center gap-3 text-xs flex-wrap">
         <span className="p-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-bold border border-emerald-200 dark:border-emerald-800">
           إجمالي المنجز هذا الأسبوع: <strong>{totalWeeklyDone} عبادة</strong>
         </span>

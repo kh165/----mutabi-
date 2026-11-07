@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { usePWAInstall } from '../../hooks/usePWAInstall.js';
-import { Download, Smartphone, X, Check } from 'lucide-react';
+import { Smartphone, X } from 'lucide-react';
 
 export function PWAInstallButton() {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
@@ -17,7 +17,7 @@ export function PWAInstallButton() {
       <button
         type="button"
         onClick={install}
-        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all shrink-0"
+        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all shrink-0 cursor-pointer"
         title="تثبيت مُتَابِـع كتطبيق على هاتفك"
       >
         <Smartphone className="w-3.5 h-3.5" />
@@ -33,7 +33,7 @@ export function PWAInstallButton() {
         <button
           type="button"
           onClick={() => setShowIOSGuide(true)}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 shrink-0 cursor-pointer"
           title="تثبيت التطبيق على آيفون"
         >
           <Smartphone className="w-3.5 h-3.5 text-emerald-600" />
@@ -51,7 +51,7 @@ export function PWAInstallButton() {
                 <button
                   type="button"
                   onClick={() => setShowIOSGuide(false)}
-                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500"
+                  className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -75,7 +75,7 @@ export function PWAInstallButton() {
               <button
                 type="button"
                 onClick={() => setShowIOSGuide(false)}
-                className="w-full py-2.5 bg-emerald-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm"
+                className="w-full py-2.5 bg-emerald-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer"
               >
                 فهمت، شكراً
               </button>

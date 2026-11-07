@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SURAHS, validateAyahRange, getSurah } from '../../data/quran.js';
-import { BookOpen, Check, AlertCircle, History, RotateCcw } from 'lucide-react';
+import { Check, AlertCircle, History, RotateCcw } from 'lucide-react';
 
 export function MemorizeInput({
   currentLog,
@@ -79,7 +79,7 @@ export function MemorizeInput({
         <button
           type="button"
           onClick={() => setKind('new')}
-          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
             kind === 'new'
               ? 'bg-emerald-600 text-white shadow-2xs'
               : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -90,7 +90,7 @@ export function MemorizeInput({
         <button
           type="button"
           onClick={() => setKind('review')}
-          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all ${
+          className={`py-2 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
             kind === 'review'
               ? 'bg-emerald-600 text-white shadow-2xs'
               : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
@@ -160,21 +160,21 @@ export function MemorizeInput({
         <button
           type="button"
           onClick={() => setToAyah(Math.min((selectedSurah?.ayahsCount || 286), toAyah + 1))}
-          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium"
+          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
         >
           +1 آية
         </button>
         <button
           type="button"
           onClick={() => setToAyah(Math.min((selectedSurah?.ayahsCount || 286), toAyah + 5))}
-          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium"
+          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
         >
           +5 آيات
         </button>
         <button
           type="button"
           onClick={() => setToAyah(Math.min((selectedSurah?.ayahsCount || 286), toAyah + 10))}
-          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium"
+          className="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
         >
           +10 آيات
         </button>
@@ -215,7 +215,7 @@ export function MemorizeInput({
         <button
           type="submit"
           disabled={saving}
-          className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50"
+          className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
         >
           <Check className="w-4 h-4" />
           <span>{saving ? 'جارٍ الحفظ...' : 'تسجيل الإنجاز'}</span>
@@ -234,7 +234,7 @@ export function MemorizeInput({
                 setSaving(false);
               }
             }}
-            className="py-3 px-3.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all"
+            className="py-3 px-3.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
             title="إلغاء تسجيل حفظ اليوم والبدء من جديد"
           >
             <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
@@ -245,7 +245,7 @@ export function MemorizeInput({
         <button
           type="button"
           onClick={onClose}
-          className="py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition-all"
+          className="py-3 px-4 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl transition-all cursor-pointer"
         >
           إلغاء
         </button>

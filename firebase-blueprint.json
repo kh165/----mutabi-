@@ -11,6 +11,8 @@
         "timezone": { "type": "string", "maxLength": 50 },
         "theme": { "type": "string", "enum": ["light", "dark", "system"] },
         "isDisabled": { "type": "boolean" },
+        "customTargets": { "type": "object" },
+        "notifications": { "type": "object" },
         "createdAt": { "type": "string", "format": "date-time" },
         "lastActiveAt": { "type": "string", "format": "date-time" }
       },
@@ -21,6 +23,7 @@
       "description": "Admin authorization marker document",
       "type": "object",
       "properties": {
+        "role": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       }
     },
@@ -58,7 +61,9 @@
         "youtubeUrl": { "type": "string", "maxLength": 500 },
         "durationMin": { "type": "number" },
         "order": { "type": "number" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "playlistTitle": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "youtubeUrl", "order"]
     },
@@ -97,20 +102,6 @@
       },
       "required": ["uid", "activityId", "itemId"]
     },
-    "MediaPlaylist": {
-      "title": "MediaPlaylist",
-      "description": "Audio/video playlist or series containing multiple lessons",
-      "type": "object",
-      "properties": {
-        "title": { "type": "string", "maxLength": 200 },
-        "description": { "type": "string", "maxLength": 1000 },
-        "playlistUrl": { "type": "string", "maxLength": 500 },
-        "category": { "type": "string", "maxLength": 100 },
-        "createdBy": { "type": "string", "maxLength": 128 },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["title"]
-    },
     "AdminNote": {
       "title": "AdminNote",
       "description": "Encouragement or note from admin to a user",
@@ -118,11 +109,22 @@
       "properties": {
         "toUid": { "type": "string", "maxLength": 128 },
         "fromUid": { "type": "string", "maxLength": 128 },
+        "fromName": { "type": "string", "maxLength": 100 },
         "text": { "type": "string", "maxLength": 1000 },
         "isRead": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["toUid", "fromUid", "text", "isRead"]
+    },
+    "Encouragement": {
+      "title": "Encouragement",
+      "description": "Custom celebration or encouragement phrases configured by admins",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text"]
     }
   },
   "firestore": {
@@ -150,13 +152,13 @@
       "schema": "ItemProgress",
       "description": "Video watch status and minutes listened keyed by {uid}_{itemId}"
     },
-    "/mediaPlaylists/{playlistId}": {
-      "schema": "MediaPlaylist",
-      "description": "Video playlists and structured series"
-    },
     "/notes/{noteId}": {
       "schema": "AdminNote",
       "description": "Notes and feedback sent by admins to specific users"
+    },
+    "/encouragements/{quoteId}": {
+      "schema": "Encouragement",
+      "description": "Celebration quotes and encouraging phrases"
     }
   }
 }

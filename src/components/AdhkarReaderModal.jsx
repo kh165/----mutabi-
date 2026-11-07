@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { MORNING_ADHKAR, EVENING_ADHKAR } from '../data/adhkar.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { db, doc, getDoc, serverTimestamp, setDoc } from '../firebase.js';
+import { useReaderHistory } from '../hooks/useReaderHistory.js';
 import {
   SunMedium,
   Moon,
@@ -19,6 +20,7 @@ export function AdhkarReaderModal({
   onCompleteCategory,
 }) {
   const { user } = useAuth();
+  const closeReader = useReaderHistory(isOpen, onClose, 'adhkar');
   const [category, setCategory] = useState(initialCategory); // 'morning' | 'evening'
   const [adhkarState, setAdhkarState] = useState({ morning: {}, evening: {} });
   const [loadingProgress, setLoadingProgress] = useState(false);
@@ -184,8 +186,13 @@ export function AdhkarReaderModal({
   }[fontSize];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-      <div className={`border rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden text-right transition-colors duration-200 ${themeStyles.modalBg}`}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="قارئ الأذكار"
+      className="fixed inset-0 z-[70] h-[100dvh] w-full bg-black/75 backdrop-blur-sm animate-in fade-in"
+    >
+      <div className={`h-full w-full max-w-none flex flex-col shadow-2xl overflow-hidden text-right transition-colors duration-200 ${themeStyles.modalBg}`}>
         {(loadingProgress || progressError) && (
           <div className={`px-4 py-2 text-xs ${progressError ? 'bg-red-100 text-red-800' : 'bg-sky-100 text-sky-800'}`}>
             {progressError || 'جارٍ تحميل تقدم الأذكار المحفوظ...'}
@@ -216,7 +223,8 @@ export function AdhkarReaderModal({
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeReader}
+            aria-label="إغلاق قارئ الأذكار"
             className="w-9 h-9 rounded-full bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current flex items-center justify-center shrink-0 cursor-pointer"
             title="إغلاق"
           >
@@ -413,7 +421,7 @@ export function AdhkarReaderModal({
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={closeReader}
             className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
           >
             إتمام وإغلاق

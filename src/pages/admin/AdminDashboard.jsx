@@ -125,12 +125,6 @@ export function AdminDashboard() {
     seedPresetsToDatabase,
   } = useActivities(true);
   const {
-    notes: selectedUserMessages,
-    loading: loadingUserMessages,
-    error: userMessagesError,
-    sendNote,
-  } = useAdminNotes(selectedUser?.uid || null);
-  const {
     phrases: encouragements,
     addPhrase,
     deletePhrase,
@@ -158,6 +152,12 @@ export function AdminDashboard() {
   const [activityItems, setActivityItems] = useState({});
   const [activityItemsError, setActivityItemsError] = useState(null);
   const [inspectionDate, setInspectionDate] = useState(() => getTodayDateString());
+  const {
+    notes: selectedUserMessages,
+    loading: loadingUserMessages,
+    error: userMessagesError,
+    sendNote,
+  } = useAdminNotes(selectedUser?.uid || null);
 
   // Note sending state
   const [noteText, setNoteText] = useState('');
@@ -186,33 +186,44 @@ export function AdminDashboard() {
 
     setLoadingUsers(true);
     setUsersError(null);
-    const q = query(collection(db, 'users'));
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const list = [];
-        snapshot.forEach((d) => {
-          list.push({ uid: d.id, ...d.data() });
-        });
-        setUsersList(list);
-        setLoadingUsers(false);
-        setUsersError(null);
-        setSelectedUser((current) => list.find((u) => u.uid === current?.uid) || list[0] || null);
-      },
-      (error) => {
-        console.error('Failed to load Realtime Database users:', error);
-        setUsersList([]);
-        setSelectedUser(null);
-        setUsersError(error);
-        setLoadingUsers(false);
-      }
-    );
-    return () => unsubscribe();
+    const userCollection = collection(db, 'users');
+    const usersByConsent = [new Map(), new Map()];
+    const loadedQueries = new Set();
+    const publishUsers = () => {
+      const users = new Map([...usersByConsent[0], ...usersByConsent[1]]);
+      const list = [...users.values()];
+      setUsersList(list);
+      setSelectedUser((current) => list.find((u) => u.uid === current?.uid) || list[0] || null);
+      setUsersError(null);
+      if (loadedQueries.size === usersByConsent.length) setLoadingUsers(false);
+    };
+    const subscriptions = [true, null].map((consent, queryIndex) => {
+      const userQuery = query(
+        userCollection,
+        where('adminMonitoringConsent', '==', consent)
+      );
+      return onSnapshot(
+        userQuery,
+        (snapshot) => {
+          const users = new Map();
+          snapshot.forEach((d) => users.set(d.id, { uid: d.id, ...d.data() }));
+          usersByConsent[queryIndex] = users;
+          loadedQueries.add(queryIndex);
+          publishUsers();
+        },
+        (error) => {
+          console.error('Failed to load Realtime Database users:', error);
+          setUsersError(error);
+          setLoadingUsers(false);
+        }
+      );
+    });
+    return () => subscriptions.forEach((unsubscribe) => unsubscribe());
   }, [isAdmin]);
 
   // Load logs for the selected user whenever selectedUser changes
   useEffect(() => {
-    if (!selectedUser?.uid) {
+    if (!selectedUser?.uid || selectedUser.adminMonitoringConsent !== true) {
       setUserLogs([]);
       setUserLogsError(null);
       setLoadingUserLogs(false);
@@ -242,10 +253,10 @@ export function AdminDashboard() {
       }
     );
     return () => unsubscribe();
-  }, [selectedUser?.uid]);
+  }, [selectedUser?.uid, selectedUser?.adminMonitoringConsent]);
 
   useEffect(() => {
-    if (!selectedUser?.uid) {
+    if (!selectedUser?.uid || selectedUser.adminMonitoringConsent !== true) {
       setUserAdhkarProgress({});
       setAdhkarProgressError(null);
       setLoadingAdhkarProgress(false);
@@ -268,10 +279,10 @@ export function AdminDashboard() {
       }
     );
     return () => unsubscribe();
-  }, [selectedUser?.uid, inspectionDate]);
+  }, [selectedUser?.uid, selectedUser?.adminMonitoringConsent, inspectionDate]);
 
   useEffect(() => {
-    if (!selectedUser?.uid) {
+    if (!selectedUser?.uid || selectedUser.adminMonitoringConsent !== true) {
       setUserItemProgress([]);
       setItemProgressError(null);
       setLoadingItemProgress(false);
@@ -304,7 +315,7 @@ export function AdminDashboard() {
       }
     );
     return () => unsubscribe();
-  }, [selectedUser?.uid]);
+  }, [selectedUser?.uid, selectedUser?.adminMonitoringConsent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -639,6 +650,11 @@ export function AdminDashboard() {
                               معطّل
                             </span>
                           )}
+                          {u.adminMonitoringConsent !== true && (
+                            <span className="text-[9px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-bold px-1.5 py-0.2 rounded-full">
+                              بانتظار الموافقة
+                            </span>
+                          )}
                         </div>
                         <p className="text-[11px] text-slate-400 truncate" dir="ltr">
                           {u.email}
@@ -664,19 +680,25 @@ export function AdminDashboard() {
                       <h3 className="font-black text-lg text-slate-900 dark:text-white">
                         {selectedUser.displayName}
                       </h3>
-                      <button
-                        type="button"
-                        onClick={() => toggleUserStatus(selectedUser.uid, selectedUser.isDisabled)}
-                        className={`text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer ${
-                          selectedUser.isDisabled
-                            ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 hover:bg-red-200'
-                            : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200'
-                        }`}
-                        title={selectedUser.isDisabled ? 'إعادة تفعيل الحساب' : 'تعطيل الحساب'}
-                      >
-                        {selectedUser.isDisabled ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-                        <span>{selectedUser.isDisabled ? 'معطّل (اضغط للتفعيل)' : 'نشط ومفعل'}</span>
-                      </button>
+                      {selectedUser.adminMonitoringConsent === true ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleUserStatus(selectedUser.uid, selectedUser.isDisabled)}
+                          className={`text-xs font-bold px-2.5 py-1 rounded-xl transition-all flex items-center gap-1 cursor-pointer ${
+                            selectedUser.isDisabled
+                              ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 hover:bg-red-200'
+                              : 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-200'
+                          }`}
+                          title={selectedUser.isDisabled ? 'إعادة تفعيل الحساب' : 'تعطيل الحساب'}
+                        >
+                          {selectedUser.isDisabled ? <UserCheck className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+                          <span>{selectedUser.isDisabled ? 'معطّل (اضغط للتفعيل)' : 'نشط ومفعل'}</span>
+                        </button>
+                      ) : (
+                        <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                          حساب قديم — بانتظار الموافقة
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5" dir="ltr">
                       {selectedUser.email} • المنطقة: {selectedUser.timezone || 'Africa/Cairo'}
@@ -707,6 +729,8 @@ export function AdminDashboard() {
                 </div>
               </div>
 
+              {selectedUser.adminMonitoringConsent === true ? (
+                <>
               {/* Inspected User KPIs */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-5 shadow-2xs">
@@ -1113,6 +1137,19 @@ export function AdminDashboard() {
                   })}
                 </div>
               </div>
+
+                </>
+              ) : (
+                <section className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-right dark:border-amber-900 dark:bg-amber-950/30">
+                  <h3 className="font-bold text-amber-900 dark:text-amber-200">
+                    بيانات المتابعة مخفية حتى يوافق المستخدم
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-amber-800 dark:text-amber-300">
+                    هذا الحساب القديم لم يسجل اختياره بعد. تظهر بيانات الحساب الأساسية فقط؛ لن تُعرض
+                    سجلات العبادات أو التقدم أو حالة الحساب قبل موافقة المستخدم من ملفه الشخصي.
+                  </p>
+                </section>
+              )}
 
               <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-800/40 sm:px-6">

@@ -16,8 +16,10 @@ import { Logo } from './components/layout/Logo.jsx';
 import { isDatabasePermissionError } from './firebase.js';
 import { Lock } from 'lucide-react';
 import { TasbeehPage } from './pages/TasbeehPage.jsx';
-import { PWAInstallBanner } from './components/layout/PWAInstallBanner.jsx';
 import { PrayerAlertBanner } from './components/PrayerAlertBanner.jsx';
+import { AdminErrorBoundary } from './components/AdminErrorBoundary.jsx';
+import { AdminFollowConsentDialog } from './components/AdminFollowConsentDialog.jsx';
+import { PWAInstallBanner } from './components/layout/PWAInstallBanner.jsx';
 import {
   NOTIFICATION_DEFAULT_SETTINGS,
   checkAndTriggerDueNotifications,
@@ -294,8 +296,13 @@ function MainApp() {
         {currentTab === 'progress' && <Progress />}
         {currentTab === 'history' && <History />}
         {currentTab === 'profile' && <Profile />}
-        {currentTab === 'admin' && (isAdmin ? <AdminDashboard /> : <Today onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')} />)}
+        {currentTab === 'admin' && (isAdmin ? <AdminErrorBoundary><AdminDashboard /></AdminErrorBoundary> : <Today onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')} />)}
       </Shell>
+      {userDoc && typeof userDoc.adminMonitoringConsent !== 'boolean' && (
+        <AdminFollowConsentDialog
+          onChoose={(consent) => updateUserDoc({ adminMonitoringConsent: consent })}
+        />
+      )}
     </>
   );
 }
@@ -304,8 +311,10 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <MainApp />
-        <PWAInstallBanner />
+        <>
+          <MainApp />
+          <PWAInstallBanner />
+        </>
       </AuthProvider>
     </ThemeProvider>
   );

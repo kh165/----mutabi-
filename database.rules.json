@@ -3,10 +3,11 @@
     ".read": false,
     ".write": false,
     "users": {
-      ".read": "auth != null && (auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists())",
+      ".read": "auth != null && (auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && query.orderByChild == 'adminMonitoringConsent' && (query.equalTo == true || query.equalTo == null)",
+      ".indexOn": ["adminMonitoringConsent"],
       "$uid": {
-        ".read": "auth != null && (auth.uid == $uid || auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists())",
-        ".write": "auth != null && (auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists() || (auth.uid == $uid && ((!data.exists() && newData.child('isDisabled').val() == false && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100) || (data.exists() && newData.child('isDisabled').val() == data.child('isDisabled').val() && newData.child('createdAt').val() == data.child('createdAt').val() && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100))))"
+        ".read": "auth != null && (auth.uid == $uid || ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && (data.child('adminMonitoringConsent').val() == true || !data.child('adminMonitoringConsent').exists())))",
+        ".write": "auth != null && (((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && (auth.uid == $uid || data.child('adminMonitoringConsent').val() == true)) || (auth.uid == $uid && ((!data.exists() && newData.child('isDisabled').val() == false && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100 && (!newData.child('adminMonitoringConsent').exists() || newData.child('adminMonitoringConsent').isBoolean())) || (data.exists() && newData.child('isDisabled').val() == data.child('isDisabled').val() && newData.child('createdAt').val() == data.child('createdAt').val() && newData.child('displayName').isString() && newData.child('displayName').val().length <= 100 && (!newData.child('adminMonitoringConsent').exists() || newData.child('adminMonitoringConsent').isBoolean())))))"
       }
     },
     "admins": {
@@ -26,28 +27,28 @@
       }
     },
     "logs": {
-      ".read": "auth != null && (auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists() || (query.orderByChild == 'uid' && query.equalTo == auth.uid))",
+      ".read": "auth != null && query.orderByChild == 'uid' && (query.equalTo == auth.uid || ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && root.child('users').child(query.equalTo).child('adminMonitoringConsent').val() == true))",
       ".indexOn": ["uid"],
       "$logId": {
-        ".read": "auth != null && (data.child('uid').val() == auth.uid || auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists())",
-        ".write": "auth != null && ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) || (!newData.exists() && data.child('uid').val() == auth.uid) || (root.child('users').child(auth.uid).child('isDisabled').val() != true && newData.child('uid').val() == auth.uid && $logId == auth.uid + '_' + newData.child('activityId').val() + '_' + newData.child('date').val() && newData.child('amount').isNumber() && newData.child('amount').val() >= 0 && newData.child('amount').val() <= 100000 && (!data.exists() || data.child('uid').val() == auth.uid)))"
+        ".read": "auth != null && (data.child('uid').val() == auth.uid || ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && root.child('users').child(data.child('uid').val()).child('adminMonitoringConsent').val() == true))",
+        ".write": "auth != null && ((((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && root.child('users').child(data.child('uid').val()).child('adminMonitoringConsent').val() == true)) || (!newData.exists() && data.child('uid').val() == auth.uid) || (root.child('users').child(auth.uid).child('isDisabled').val() != true && newData.child('uid').val() == auth.uid && $logId == auth.uid + '_' + newData.child('activityId').val() + '_' + newData.child('date').val() && newData.child('amount').isNumber() && newData.child('amount').val() >= 0 && newData.child('amount').val() <= 100000 && (!data.exists() || data.child('uid').val() == auth.uid)))"
       }
     },
     "itemProgress": {
-      ".read": "auth != null && (auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists() || (query.orderByChild == 'uid' && query.equalTo == auth.uid))",
+      ".read": "auth != null && query.orderByChild == 'uid' && (query.equalTo == auth.uid || ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && root.child('users').child(query.equalTo).child('adminMonitoringConsent').val() == true))",
       ".indexOn": ["uid"],
       "$progressId": {
-        ".read": "auth != null && (data.child('uid').val() == auth.uid || auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists())",
-        ".write": "auth != null && ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) || (!newData.exists() && data.child('uid').val() == auth.uid) || (root.child('users').child(auth.uid).child('isDisabled').val() != true && newData.child('uid').val() == auth.uid && newData.child('activityId').isString() && newData.child('itemId').isString() && (!data.exists() || data.child('uid').val() == auth.uid)))"
+        ".read": "auth != null && (data.child('uid').val() == auth.uid || ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && root.child('users').child(data.child('uid').val()).child('adminMonitoringConsent').val() == true))",
+        ".write": "auth != null && ((((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && root.child('users').child(data.child('uid').val()).child('adminMonitoringConsent').val() == true)) || (!newData.exists() && data.child('uid').val() == auth.uid) || (root.child('users').child(auth.uid).child('isDisabled').val() != true && newData.child('uid').val() == auth.uid && newData.child('activityId').isString() && newData.child('itemId').isString() && (!data.exists() || data.child('uid').val() == auth.uid)))"
       }
     },
     "adhkarProgress": {
       "$uid": {
-        ".read": "auth != null && (auth.uid == $uid || auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists())",
+        ".read": "auth != null && (auth.uid == $uid || ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) && root.child('users').child($uid).child('adminMonitoringConsent').val() == true))",
         "$date": {
           "$category": {
             "$dhikrId": {
-              ".write": "auth != null && ((auth.token.email == 'khalid.niletechno@gmail.com' || auth.token.email == 'khalidsalah9444@gmail.com' || auth.token.email == 'khalidsalah948@gmail.com' || root.child('admins').child(auth.uid).exists()) || (auth.uid == $uid && root.child('users').child(auth.uid).child('isDisabled').val() != true))",
+              ".write": "auth != null && auth.uid == $uid && root.child('users').child(auth.uid).child('isDisabled').val() != true",
               ".validate": "newData.hasChildren(['count']) && newData.child('count').isNumber() && newData.child('count').val() >= 0 && newData.child('count').val() <= 1000"
             }
           }

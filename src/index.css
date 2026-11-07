@@ -2,6 +2,14 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@font-face {
+  font-family: 'Amiri Quran';
+  src: url('/fonts/AmiriQuran-Regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 @layer base {
   * {
     border-color: var(--tw-border-color, theme('colors.slate.200'));
@@ -15,6 +23,20 @@
   body {
     transition: background-color 0.2s ease, color 0.2s ease;
   }
+}
+
+.quran-text {
+  font-family: 'Amiri Quran', serif;
+}
+
+.quran-mushaf-page::before {
+  position: absolute;
+  inset: 9px;
+  border: 1px solid currentColor;
+  border-radius: 0.55rem;
+  content: '';
+  opacity: 0.16;
+  pointer-events: none;
 }
 
 /* Custom scrollbars */

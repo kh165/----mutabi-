@@ -7,8 +7,6 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut as fbSignOut,
-  setPersistence,
-  browserLocalPersistence,
   updateProfile,
 } from 'firebase/auth';
 import {
@@ -42,10 +40,6 @@ export function AuthProvider({ children }) {
   const pendingNameRef = useRef(null);
 
   useEffect(() => {
-    try {
-      setPersistence(auth, browserLocalPersistence).catch(() => {});
-    } catch {}
-
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {

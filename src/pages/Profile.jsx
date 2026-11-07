@@ -30,6 +30,8 @@ import {
   Moon,
   Bell,
   BellRing,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { Logo } from '../components/layout/Logo.jsx';
 
@@ -58,6 +60,8 @@ export function Profile() {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [error, setError] = useState(null);
+  const [savingConsent, setSavingConsent] = useState(false);
+  const [consentError, setConsentError] = useState(null);
 
   useEffect(() => {
     setNotifications(userDoc?.notifications || NOTIFICATION_DEFAULT_SETTINGS);
@@ -108,6 +112,19 @@ export function Profile() {
       setError(err.message || 'تعذر تحديث مواقيت الصلاة');
     } finally {
       setDetectingLocation(false);
+    }
+  };
+
+  const handleToggleAdminFollow = async () => {
+    setSavingConsent(true);
+    setConsentError(null);
+    try {
+      await updateUserDoc({ adminMonitoringConsent: userDoc?.adminMonitoringConsent !== true });
+    } catch (err) {
+      console.error('Failed to update admin follow consent:', err);
+      setConsentError('تعذر حفظ إعداد الخصوصية. تحقق من اتصالك وحاول مرة أخرى.');
+    } finally {
+      setSavingConsent(false);
     }
   };
 
@@ -271,6 +288,47 @@ export function Profile() {
               <span className="text-xs">الوضع الداكن</span>
             </button>
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h4 className="flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
+                {userDoc?.adminMonitoringConsent === true ? (
+                  <Eye className="h-4 w-4 text-emerald-600" />
+                ) : (
+                  <EyeOff className="h-4 w-4 text-slate-500" />
+                )}
+                متابعة المشرف لتقدمي
+              </h4>
+              <p className="mt-1 max-w-xl text-xs leading-6 text-slate-500 dark:text-slate-400">
+                {userDoc?.adminMonitoringConsent === true
+                  ? 'المشرف يستطيع رؤية ملفك وسجلاتك وتقدمك. يمكنك إيقاف ذلك في أي وقت.'
+                  : 'بيانات متابعتك مخفية عن المشرف. يمكنك السماح له بالاطلاع عليها لمساعدتك.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleAdminFollow}
+              disabled={savingConsent}
+              className={`shrink-0 rounded-xl px-4 py-2.5 text-xs font-bold transition disabled:opacity-50 ${
+                userDoc?.adminMonitoringConsent === true
+                  ? 'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              }`}
+            >
+              {savingConsent
+                ? 'جارٍ الحفظ...'
+                : userDoc?.adminMonitoringConsent === true
+                  ? 'إيقاف المتابعة'
+                  : 'السماح بمتابعتي'}
+            </button>
+          </div>
+          {consentError && (
+            <p role="alert" className="mt-3 text-xs font-semibold text-rose-600 dark:text-rose-400">
+              {consentError}
+            </p>
+          )}
         </div>
 
         {/* Web Notifications System Settings */}

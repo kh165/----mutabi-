@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth,
+} from 'firebase/auth';
 import {
   getDatabase,
   ref as databaseRef,
@@ -18,7 +23,16 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db = getDatabase(app, firebaseConfig.databaseURL);
-export const auth = getAuth(app);
+export const auth = (() => {
+  try {
+    return initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+    });
+  } catch (error) {
+    if (error?.code !== 'auth/already-initialized') throw error;
+    return getAuth(app);
+  }
+})();
 
 const makeRef = (path) => ({
   path,
@@ -88,7 +102,12 @@ const readEntries = (snapshot, source) => {
 
   for (const constraint of constraints) {
     if (constraint.type === 'where') {
-      entries = entries.filter(({ data }) => data[constraint.field] === constraint.value);
+      entries = entries.filter(({ data }) => {
+        const value = data[constraint.field];
+        return constraint.value === null
+          ? value === null || value === undefined
+          : value === constraint.value;
+      });
     }
   }
 

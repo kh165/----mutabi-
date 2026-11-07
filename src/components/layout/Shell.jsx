@@ -20,7 +20,6 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { formatArabicDate, getTodayDateString } from '../../lib/dates.js';
-import { PWAInstallButton } from './PWAInstallButton.jsx';
 import { Logo } from './Logo.jsx';
 import { QuranReaderModal } from '../QuranReaderModal.jsx';
 import { MessageThreadCard } from '../MessageThreadCard.jsx';
@@ -93,9 +92,6 @@ export function Shell({
 
           {/* Right Tools: PWA Install, Theme Toggle, Notifications & User Avatar */}
           <div className="flex items-center gap-1.5 sm:gap-2.5">
-            {/* PWA Install Button */}
-            <PWAInstallButton />
-
             {/* Quran Reader with Night Mode */}
             <button
               type="button"
@@ -321,6 +317,10 @@ export function Shell({
           {children}
         </main>
       </div>
+
+      <footer dir="ltr" className="w-full px-4 pb-24 pt-2 text-center text-xs text-slate-400 dark:text-slate-500 md:pb-5">
+        Khalid Salah — All rights reserved | 2026 ©
+      </footer>
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 z-40 px-1.5 py-1.5 flex items-center justify-around shadow-lg">

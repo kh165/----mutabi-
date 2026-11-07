@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export function Logo({ className = "h-9 sm:h-10", showBadge = true }) {
+export function Logo({ className = "h-9 sm:h-10" }) {
   const [imgError, setImgError] = useState(false);
 
   return (

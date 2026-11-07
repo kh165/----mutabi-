@@ -1,7 +1,6 @@
 /**
- * Authentic Holy Quran Texts - Verified Uthmani Script (النص القرآني بالرسم العثماني المعتمد)
- * Source of authoritative digital text: Tanzil Project & King Fahd Complex for the Printing of the Holy Quran
- * Pre-bundled offline library for immediate, 0ms latency reading, with fallback to official Tanzil API
+ * Small bundled Uthmani text cache. Incomplete entries are rejected; uncached surahs
+ * are loaded from a Quran text source and checked against the expected verse count.
  */
 
 import { getSurah } from './quran.js';
@@ -146,93 +145,99 @@ export const AUTHENTIC_QURAN_SURAHS = {
   }
 };
 
-/**
- * Fetch authoritative Uthmani Quran verses from Tanzil via official verified API,
- * with resilient localStorage cache for offline availability.
- */
+const isCompleteSurah = (surah, expectedAyahs) =>
+  Array.isArray(surah?.ayahs) &&
+  surah.ayahs.length === expectedAyahs &&
+  surah.ayahs.every(
+    (ayah, index) =>
+      ayah.number === index + 1 && typeof ayah.text === 'string' && ayah.text.trim()
+  );
+
 export async function getSurahAyahs(surahNumber) {
   const num = Number(surahNumber);
   const meta = getSurah(num);
+  if (!meta) throw new Error('رقم السورة غير صحيح.');
 
-  // 1. Check pre-bundled verified set first for 0ms load
-  if (AUTHENTIC_QURAN_SURAHS[num]) {
+  if (isCompleteSurah(AUTHENTIC_QURAN_SURAHS[num], meta.ayahsCount)) {
     return AUTHENTIC_QURAN_SURAHS[num];
   }
 
-  // 2. Check persistent local storage cache
   const cacheKey = `quran_uthmani_surah_${num}`;
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
-      return JSON.parse(cached);
+      const surah = JSON.parse(cached);
+      if (isCompleteSurah(surah, meta.ayahsCount)) return surah;
+      localStorage.removeItem(cacheKey);
     }
-  } catch {}
+  } catch (error) {
+    console.warn('Could not read the cached Quran text:', error);
+  }
 
-  // 3. Fetch from authoritative Tanzil Uthmani Edition
   try {
     const res = await fetch(`https://api.alquran.cloud/v1/surah/${num}/quran-uthmani`);
     if (res.ok) {
       const data = await res.json();
-      if (data?.data?.ayahs) {
-        const processedAyahs = data.data.ayahs.map((a, index) => {
-          let text = a.text;
-          if (num !== 1 && index === 0 && text.startsWith("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ")) {
-            text = text.replace("بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ", "");
+      if (data?.data?.ayahs?.length === meta.ayahsCount) {
+        const processedAyahs = data.data.ayahs.map((ayah, index) => {
+          let text = ayah.text;
+          if (num !== 1 && index === 0 && text.startsWith('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ')) {
+            text = text.replace('بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ ', '');
           }
-          return {
-            number: a.numberInSurah,
-            text,
-          };
+          return { number: ayah.numberInSurah, text };
         });
+
+        if (!isCompleteSurah({ ayahs: processedAyahs }, meta.ayahsCount)) {
+          throw new Error(`The Quran text response for surah ${num} was incomplete.`);
+        }
 
         const result = {
           number: data.data.number,
-          name: meta?.name || data.data.name,
+          name: meta.name || data.data.name,
           englishName: data.data.englishName,
           revelationType: data.data.revelationType === 'Meccan' ? 'مكية' : 'مدنية',
           ayahsCount: data.data.numberOfAyahs,
           ayahs: processedAyahs,
         };
-
         try {
           localStorage.setItem(cacheKey, JSON.stringify(result));
-        } catch {}
+        } catch (error) {
+          console.warn('Could not cache the Quran text locally:', error);
+        }
         return result;
       }
     }
-  } catch (err) {
-    console.warn('Network fetch for Quran surah failed, trying secondary mirror:', err);
+  } catch (error) {
+    console.warn('Primary Quran text request failed; trying the secondary source:', error);
   }
 
-  // 4. Secondary mirror: Quran.com API v4
   try {
     const res = await fetch(`https://api.quran.com/api/v4/quran/verses/uthmani?chapter_number=${num}`);
     if (res.ok) {
       const json = await res.json();
-      if (json?.verses) {
+      if (json?.verses?.length === meta.ayahsCount) {
         const result = {
           number: num,
-          name: meta?.name || `سورة رقم ${num}`,
-          ayahs: json.verses.map((v, idx) => ({
-            number: idx + 1,
-            text: v.text_uthmani,
+          name: meta.name,
+          ayahs: json.verses.map((verse, index) => ({
+            number: index + 1,
+            text: verse.text_uthmani,
           })),
         };
+        if (!isCompleteSurah(result, meta.ayahsCount)) {
+          throw new Error(`The secondary Quran text response for surah ${num} was incomplete.`);
+        }
         try {
           localStorage.setItem(cacheKey, JSON.stringify(result));
-        } catch {}
+        } catch (error) {
+          console.warn('Could not cache the Quran text locally:', error);
+        }
         return result;
       }
     }
-  } catch {}
+  } catch (error) {
+    console.warn('Secondary Quran text request failed:', error);
+  }
 
-  // Fallback if offline and not in bundle
-  return {
-    number: num,
-    name: meta?.name || `سورة رقم ${num}`,
-    ayahs: [
-      { number: 1, text: "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ" },
-      { number: 2, text: "يرجى التأكد من الاتصال بالإنترنت لتحميل نصوص هذه السورة بالرسم العثماني المعتمد للمرة الأولى وحفظها للقراءة الدائمة دون إنترنت." }
-    ]
-  };
+  throw new Error('تعذر تحميل نص السورة كاملًا من مصادر القرآن. تحقق من اتصال الإنترنت وحاول مرة أخرى.');
 }

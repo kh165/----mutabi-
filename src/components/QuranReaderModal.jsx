@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SURAHS } from '../data/quran.js';
 import { getSurahAyahs } from '../data/quranTexts.js';
+import { useReaderHistory } from '../hooks/useReaderHistory.js';
 import {
   BookOpen,
   Moon,
@@ -17,6 +18,8 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
   const [selectedSurah, setSelectedSurah] = useState(initialSurahNumber);
   const [surahContent, setSurahContent] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
   const audioRef = useRef(null);
@@ -25,6 +28,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
   const [readerTheme, setReaderTheme] = useState('night');
   // Font Size: 'sm' (17px) | 'md' (21px) | 'lg' (26px) | 'xl' (32px)
   const [fontSize, setFontSize] = useState('lg');
+  const closeReader = useReaderHistory(isOpen, onClose, 'quran');
 
   useEffect(() => {
     if (!isOpen) {
@@ -39,6 +43,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
 
     async function loadSurah() {
       setLoading(true);
+      setLoadError(null);
       // Stop current audio when switching Surah
       if (audioRef.current) {
         audioRef.current.pause();
@@ -49,6 +54,12 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
         const data = await getSurahAyahs(selectedSurah);
         if (!isCancelled) {
           setSurahContent(data);
+        }
+      } catch (error) {
+        console.error('Failed to load the complete Quran surah:', error);
+        if (!isCancelled) {
+          setSurahContent(null);
+          setLoadError(error.message || 'تعذر تحميل نص السورة كاملًا.');
         }
       } finally {
         if (!isCancelled) {
@@ -61,7 +72,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
     return () => {
       isCancelled = true;
     };
-  }, [isOpen, selectedSurah]);
+  }, [isOpen, selectedSurah, retryAttempt]);
 
   if (!isOpen) return null;
 
@@ -106,7 +117,8 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
     normal: {
       modalBg: 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100',
       headerBg: 'bg-slate-50 dark:bg-slate-800/80 border-slate-100 dark:border-slate-800',
-      ayahBg: 'hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20',
+      pageSurface: 'bg-[#fffdf7] text-[#3d3021] border-[#c8a96b] shadow-[0_12px_40px_rgba(80,55,20,0.12)]',
+      ayahBg: 'hover:bg-emerald-900/5',
       frameBorder: 'border-emerald-600/30 dark:border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10',
       bismillahColor: 'text-emerald-800 dark:text-emerald-300',
       badgeBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
@@ -116,7 +128,8 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
     night: {
       modalBg: 'bg-[#0a0d14] border-slate-800 text-[#e2e8f0]',
       headerBg: 'bg-[#0f1523] border-slate-800/90',
-      ayahBg: 'hover:bg-[#131b2e]',
+      pageSurface: 'bg-[#111827] text-[#f1e7d0] border-amber-500/50 shadow-[0_12px_40px_rgba(0,0,0,0.35)]',
+      ayahBg: 'hover:bg-white/5',
       frameBorder: 'border-amber-500/30 bg-amber-950/10',
       bismillahColor: 'text-amber-300',
       badgeBg: 'bg-slate-800/80 text-slate-300',
@@ -126,7 +139,8 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
     sepia: {
       modalBg: 'bg-[#fbf7ee] border-[#e8dfc8] text-[#3e3427]',
       headerBg: 'bg-[#f4ecdb] border-[#e2d5bc]',
-      ayahBg: 'hover:bg-[#f6efe1]',
+      pageSurface: 'bg-[#f7efdf] text-[#49391f] border-[#b89b66] shadow-[0_12px_40px_rgba(80,55,20,0.12)]',
+      ayahBg: 'hover:bg-amber-900/5',
       frameBorder: 'border-[#c4ad85] bg-[#f5ede0]',
       bismillahColor: 'text-[#6d4c18]',
       badgeBg: 'bg-[#ebdcc4] text-[#42331c]',
@@ -136,10 +150,10 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
   }[readerTheme];
 
   const fontClass = {
-    sm: 'text-base sm:text-lg leading-[2.4]',
-    md: 'text-lg sm:text-xl leading-[2.6]',
-    lg: 'text-xl sm:text-2xl leading-[2.9]',
-    xl: 'text-2xl sm:text-3xl leading-[3.2]',
+    sm: 'text-base sm:text-lg leading-[2.2]',
+    md: 'text-lg sm:text-xl leading-[2.35]',
+    lg: 'text-xl sm:text-2xl leading-[2.5]',
+    xl: 'text-2xl sm:text-3xl leading-[2.65]',
   }[fontSize];
 
   const handlePrevSurah = () => {
@@ -151,9 +165,14 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="قارئ القرآن الكريم"
+      className="fixed inset-0 z-[70] h-[100dvh] w-full bg-black/80 backdrop-blur-sm animate-in fade-in"
+    >
       <div
-        className={`border rounded-3xl w-full max-w-3xl max-h-[95vh] flex flex-col shadow-2xl overflow-hidden text-right transition-colors duration-200 ${themeStyles.modalBg}`}
+        className={`h-full w-full max-w-none flex flex-col shadow-2xl overflow-hidden text-right transition-colors duration-200 ${themeStyles.modalBg}`}
       >
         {/* Top Header */}
         <div className={`p-4 sm:p-5 border-b flex items-center justify-between gap-3 ${themeStyles.headerBg}`}>
@@ -168,7 +187,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
                   {currentSurahMeta.type === 'meccan' ? 'مكية' : 'مدنية'} • {currentSurahMeta.ayahsCount} آية
                 </span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${themeStyles.badgeBg}`}>
-                  الصفحة {currentSurahMeta.startPage}
+                  عرض المصحف
                 </span>
               </h3>
               <p className={`text-xs ${themeStyles.subText}`}>
@@ -203,7 +222,8 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeReader}
+              aria-label="إغلاق قارئ القرآن"
               className="w-9 h-9 rounded-full bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current flex items-center justify-center shrink-0 cursor-pointer"
               title="إغلاق"
             >
@@ -313,52 +333,66 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
         </div>
 
         {/* Quran Surah Reading Body */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6">
+        <div className="flex-1 overflow-y-auto bg-black/[0.025] p-3 sm:p-6 md:p-8 dark:bg-black/10">
           {loading ? (
             <div className="py-20 text-center space-y-3">
               <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
               <p className={`text-xs ${themeStyles.subText}`}>جارٍ جلب الآيات الكريمة بالرسم العثماني المعتمد...</p>
             </div>
+          ) : loadError ? (
+            <div role="alert" className="mx-auto max-w-lg py-20 text-center">
+              <p className="font-bold text-rose-500">{loadError}</p>
+              <button
+                type="button"
+                onClick={() => setRetryAttempt((attempt) => attempt + 1)}
+                className="mt-4 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+              >
+                إعادة المحاولة
+              </button>
+            </div>
           ) : (
-            <div className="space-y-6">
-              {/* Surah Header Banner Frame */}
-              <div className={`text-center py-5 px-4 rounded-3xl border ${themeStyles.frameBorder} space-y-2 relative overflow-hidden shadow-xs`}>
+            <article
+              dir="rtl"
+              aria-label={`صفحة مصحف سورة ${currentSurahMeta.name}`}
+              className={`quran-mushaf-page relative mx-auto min-h-[65vh] w-full max-w-4xl rounded-xl border-2 px-5 py-8 sm:px-10 sm:py-10 ${themeStyles.pageSurface}`}
+            >
+              <div className="relative z-10 space-y-7">
+              <div className="text-center">
+                <div className={`mx-auto max-w-xl space-y-2 rounded-xl border border-current/20 bg-current/[0.025] px-3 py-3 sm:px-5 ${themeStyles.frameBorder}`}>
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-xs font-serif opacity-50">۞</span>
-                  <h4 className="text-2xl sm:text-3xl font-black font-serif tracking-wide">
+                  <h4 className="quran-text text-2xl font-bold tracking-wide sm:text-3xl">
                     سُورَةُ {currentSurahMeta.name}
                   </h4>
                   <span className="text-xs font-serif opacity-50">۞</span>
                 </div>
 
-                <div className="flex items-center justify-center gap-3 text-xs opacity-80 pt-0.5">
-                  <span>ترتيبها: {currentSurahMeta.number}</span>
-                  <span>•</span>
+                <div className="flex items-center justify-center gap-2 text-[10px] opacity-75 sm:gap-3 sm:text-xs">
                   <span>{currentSurahMeta.type === 'meccan' ? 'مكية' : 'مدنية'}</span>
-                  <span>•</span>
-                  <span>آياتها: {currentSurahMeta.ayahsCount}</span>
+                  <span aria-hidden="true">۞</span>
+                  <span>{currentSurahMeta.ayahsCount} آية</span>
+                </div>
                 </div>
 
                 {/* Basmalah for all except Surah 1 and Surah 9 */}
                 {selectedSurah !== 1 && selectedSurah !== 9 && (
-                  <div className="pt-3">
-                    <p className={`text-xl sm:text-2xl font-bold font-serif ${themeStyles.bismillahColor}`}>
+                  <div className="pt-5">
+                    <p className={`quran-text text-xl font-bold sm:text-2xl ${themeStyles.bismillahColor}`}>
                       بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
                     </p>
                   </div>
                 )}
               </div>
 
-              {/* Quranic Text Flow with Authentic Ayah Medallions */}
-              <div className={`font-serif text-justify ${fontClass} p-2 rounded-2xl`}>
+              <div className={`quran-text text-justify ${fontClass} px-1 sm:px-3`}>
                 {surahContent?.ayahs?.map((ayah) => (
                   <span
                     key={ayah.number}
-                    className={`inline px-1 py-0.5 rounded-lg transition-colors ${themeStyles.ayahBg}`}
+                    className={`inline rounded-md px-0.5 transition-colors ${themeStyles.ayahBg}`}
                   >
                     <span>{ayah.text}</span>{' '}
                     <span
-                      className={`inline-flex items-center justify-center min-w-[28px] h-7 px-1.5 mx-1 rounded-full border text-[11px] font-sans font-black select-none align-middle ${themeStyles.ayahMarker}`}
+                      className={`inline-flex h-7 min-w-[28px] select-none items-center justify-center rounded-full border px-1.5 align-middle font-sans text-[11px] font-black ${themeStyles.ayahMarker}`}
                       title={`آية ${ayah.number}`}
                     >
                       {ayah.number}
@@ -366,14 +400,15 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
                   </span>
                 ))}
               </div>
-            </div>
+              </div>
+            </article>
           )}
         </div>
 
         {/* Footer Actions */}
         <div className={`p-4 border-t flex items-center justify-between gap-3 ${themeStyles.headerBg}`}>
           <div className="flex items-center gap-2 text-xs opacity-75">
-            <span>موضع السورة: صفحة {currentSurahMeta.startPage}</span>
+            <span>بداية السورة في المصحف: صفحة {currentSurahMeta.startPage}</span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -382,7 +417,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
                 type="button"
                 onClick={() => {
                   onLogPagesRead(currentSurahMeta);
-                  onClose();
+                  closeReader();
                 }}
                 className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
               >
@@ -393,7 +428,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={closeReader}
               className="py-2.5 px-5 bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current font-bold text-xs rounded-xl transition-all cursor-pointer"
             >
               إلغاء وإغلاق المصحف

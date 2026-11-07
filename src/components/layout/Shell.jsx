@@ -8,10 +8,11 @@ import {
   History,
   User,
   Shield,
-  Bell,
   LogOut,
   Flame,
   CheckCircle2,
+  MessageCircle,
+  X,
   ChevronDown,
   Sun,
   Moon,
@@ -22,6 +23,7 @@ import { formatArabicDate, getTodayDateString } from '../../lib/dates.js';
 import { PWAInstallButton } from './PWAInstallButton.jsx';
 import { Logo } from './Logo.jsx';
 import { QuranReaderModal } from '../QuranReaderModal.jsx';
+import { MessageThreadCard } from '../MessageThreadCard.jsx';
 
 export function Shell({
   currentTab,
@@ -31,7 +33,7 @@ export function Shell({
 }) {
   const { user, userDoc, isAdmin, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
-  const { notes, markAsRead } = useAdminNotes();
+  const { notes, loading: notesLoading, error: notesError, markAsRead, replyToNote } = useAdminNotes();
   const [notesOpen, setNotesOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [quranOpen, setQuranOpen] = useState(false);
@@ -125,62 +127,17 @@ export function Shell({
                 type="button"
                 onClick={() => setNotesOpen(!notesOpen)}
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 relative transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
-                title="ملاحظات المشرف"
+                title="رسائل المشرف"
+                aria-label="فتح رسائل المشرف"
+                aria-expanded={notesOpen}
               >
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+                <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                 {unreadNotes.length > 0 && (
                   <span className="absolute -top-1 -end-1 w-4 h-4 sm:w-5 sm:h-5 bg-emerald-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-slate-900">
-                    {unreadNotes.length}
+                    {unreadNotes.length > 9 ? '9+' : unreadNotes.length}
                   </span>
                 )}
               </button>
-
-              {notesOpen && (
-                <div className="absolute end-0 mt-2 w-72 sm:w-88 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 p-4 z-50 text-right animate-in fade-in">
-                  <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
-                    <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
-                      ملاحظات وتوجيهات المشرف
-                    </span>
-                    <span className="text-[11px] text-slate-400">
-                      {notes.length} رسالة
-                    </span>
-                  </div>
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto mt-2">
-                    {notes.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-slate-400">
-                        لا توجد ملاحظات أو رسائل جديدة حالياً.
-                      </div>
-                    ) : (
-                      notes.map((n) => (
-                        <div
-                          key={n.id}
-                          className={`py-2.5 px-2 rounded-xl transition-all ${
-                            !n.isRead ? 'bg-emerald-50/70 dark:bg-emerald-950/40' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
-                            <span className="font-bold text-emerald-700 dark:text-emerald-400">
-                              {n.fromName || 'المشرف'}
-                            </span>
-                            {!n.isRead && (
-                              <button
-                                onClick={() => markAsRead(n.id)}
-                                className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                              >
-                                <CheckCircle2 className="w-3 h-3" />
-                                تم الاطلاع
-                              </button>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed">
-                            {n.text}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* User Avatar & Dropdown */}
@@ -253,6 +210,77 @@ export function Shell({
           </div>
         </div>
       </header>
+
+      {notesOpen && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-[2px]"
+            onClick={() => setNotesOpen(false)}
+            aria-label="إغلاق الرسائل"
+          />
+          <aside
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="messages-panel-title"
+            className="fixed inset-y-0 end-0 z-[60] flex w-full max-w-md flex-col border-s border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-800 dark:bg-slate-950 animate-in slide-in-from-right duration-200"
+          >
+            <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
+              <div>
+                <h2 id="messages-panel-title" className="font-black text-slate-900 dark:text-white">
+                  رسائل المشرف
+                </h2>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {notes.length} رسالة • لكل رسالة رد واحد
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNotesOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 transition hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                aria-label="إغلاق لوحة الرسائل"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
+              {notesLoading && (
+                <p className="py-8 text-center text-sm text-slate-500">جارٍ تحميل الرسائل...</p>
+              )}
+              {notesError && (
+                <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                  تعذر تحميل الرسائل. حاول إعادة فتح اللوحة.
+                </p>
+              )}
+              {!notesLoading && !notesError && notes.length === 0 && (
+                <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900">
+                  <MessageCircle className="mx-auto h-9 w-9 text-emerald-500" />
+                  <p className="mt-3 font-bold text-slate-800 dark:text-slate-100">لا توجد رسائل بعد</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    ستظهر هنا رسائل المشرف ويمكنك الرد على كل رسالة مرة واحدة.
+                  </p>
+                </div>
+              )}
+              {notes.map((note) => (
+                <div key={note.id} className="space-y-2">
+                  <MessageThreadCard note={note} canReply onReply={replyToNote} />
+                  {!note.isRead && (
+                    <button
+                      type="button"
+                      onClick={() => markAsRead(note.id)}
+                      className="ms-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      تم الاطلاع
+                    </button>
+                  )}
+                  <div className="border-b border-slate-200/70 pt-2 dark:border-slate-800" />
+                </div>
+              ))}
+            </div>
+          </aside>
+        </>
+      )}
 
       {/* Main Layout Body */}
       <div className="flex-1 max-w-7xl mx-auto w-full px-3 sm:px-6 py-4 sm:py-6 flex gap-6 lg:gap-8">

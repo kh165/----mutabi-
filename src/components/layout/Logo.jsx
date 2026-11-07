@@ -8,24 +8,14 @@ export function Logo({ className = "h-9 sm:h-10", showBadge = true }) {
       <div className="relative flex items-center justify-center p-1 rounded-2xl bg-white/95 dark:bg-slate-800/90 shadow-2xs border border-emerald-100 dark:border-slate-700/60 transition-transform group-hover:scale-105">
         {!imgError ? (
           <img
-            src="/logo.png"
-            alt="مُتَابِع"
-            className={`${className} w-auto object-contain`}
+            src="/logo-mark.png"
+            alt="علامة مُتَابِع"
+            className={`${className} aspect-square w-auto object-contain`}
             loading="eager"
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="flex items-center gap-2 px-1">
-            <svg className="w-7 h-7 text-emerald-600" viewBox="0 0 48 48" fill="none">
-              <rect width="48" height="48" rx="14" fill="#059669" />
-              <path d="M24 10L35 24L24 38L13 24L24 10Z" stroke="white" strokeWidth="2.5" strokeLinejoin="round" fill="none" />
-              <circle cx="24" cy="24" r="6" fill="#10B981" />
-              <path d="M24 14V34M14 24H34" stroke="white" strokeWidth="1.5" strokeOpacity="0.8" />
-            </svg>
-            <span className="font-black text-emerald-700 dark:text-emerald-400 text-lg tracking-tight font-serif">
-              مُتَابِـع
-            </span>
-          </div>
+          <LogoMarkGraphic className={`${className} aspect-square w-auto`} />
         )}
       </div>
     </div>
@@ -39,18 +29,32 @@ export function LogoIcon({ className = "w-9 h-9" }) {
     <div className={`relative flex items-center justify-center p-0.5 rounded-2xl bg-white dark:bg-slate-800 shadow-2xs border border-emerald-100 dark:border-slate-700/60 overflow-hidden ${className}`}>
       {!imgError ? (
         <img
-          src="/logo.png"
+        src="/logo-mark.png"
           alt="شعار متابع"
           className="w-full h-full object-contain"
           onError={() => setImgError(true)}
         />
       ) : (
-        <svg className="w-full h-full text-emerald-600" viewBox="0 0 48 48" fill="none">
-          <rect width="48" height="48" rx="12" fill="#059669" />
-          <path d="M24 10L35 24L24 38L13 24L24 10Z" stroke="white" strokeWidth="2.5" strokeLinejoin="round" fill="none" />
-          <circle cx="24" cy="24" r="5" fill="#10B981" />
-        </svg>
+        <LogoMarkGraphic className="h-full w-full" />
       )}
     </div>
+  );
+}
+
+function LogoMarkGraphic({ className = '' }) {
+  return (
+    <svg className={`text-emerald-600 ${className}`} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect width="48" height="48" rx="14" fill="#126C45" />
+      <rect x="10" y="9" width="28" height="30" rx="6" fill="white" />
+      <rect x="18" y="6" width="12" height="5" rx="2.5" fill="#A7F3D0" />
+      <circle cx="18" cy="20" r="3.5" fill="#10A563" />
+      <path d="m16.5 20 1.1 1.1 2-2.2" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="24" y="18.5" width="9" height="2.5" rx="1.25" fill="#BCEBD4" />
+      <circle cx="18" cy="28" r="3.5" fill="#10A563" />
+      <path d="m16.5 28 1.1 1.1 2-2.2" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="24" y="26.5" width="9" height="2.5" rx="1.25" fill="#BCEBD4" />
+      <circle cx="18" cy="36" r="3.1" stroke="#10A563" strokeWidth="1.5" />
+      <rect x="24" y="34.5" width="9" height="2.5" rx="1.25" fill="#126C45" />
+    </svg>
   );
 }

@@ -52,6 +52,7 @@ import {
   ListVideo,
 } from 'lucide-react';
 import { fetchPlaylistDetails, extractPlaylistId } from '../../lib/youtubePlaylist.js';
+import { MessageThreadCard } from '../../components/MessageThreadCard.jsx';
 
 export const ICON_CATEGORIES = [
   {
@@ -123,7 +124,12 @@ export function AdminDashboard() {
     reorderActivities,
     seedPresetsToDatabase,
   } = useActivities(true);
-  const { sendNote } = useAdminNotes();
+  const {
+    notes: selectedUserMessages,
+    loading: loadingUserMessages,
+    error: userMessagesError,
+    sendNote,
+  } = useAdminNotes(selectedUser?.uid || null);
   const {
     phrases: encouragements,
     addPhrase,
@@ -157,6 +163,7 @@ export function AdminDashboard() {
   const [noteText, setNoteText] = useState('');
   const [noteSending, setNoteSending] = useState(false);
   const [noteSuccess, setNoteSuccess] = useState(false);
+  const [noteError, setNoteError] = useState('');
 
   // Encouragement phrase state
   const [newPhraseText, setNewPhraseText] = useState('');
@@ -355,11 +362,15 @@ export function AdminDashboard() {
     if (!selectedUser?.uid || !noteText.trim()) return;
     setNoteSending(true);
     setNoteSuccess(false);
+    setNoteError('');
     try {
       await sendNote(selectedUser.uid, noteText.trim());
       setNoteText('');
       setNoteSuccess(true);
       setTimeout(() => setNoteSuccess(false), 3500);
+    } catch (error) {
+      console.error('Failed to send admin message:', error);
+      setNoteError('تعذر إرسال الرسالة. حاول مرة أخرى.');
     } finally {
       setNoteSending(false);
     }
@@ -1103,45 +1114,89 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              {/* CORE SECTION 3: DIRECT ENCOURAGEMENT NOTE FROM ADMIN TO USER */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
-                <div>
-                  <h3 className="font-black text-base text-slate-900 dark:text-white flex items-center gap-2">
-                    <Send className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                    <span>إرسال تشجيع أو ملاحظة مباشرة لـ {selectedUser.displayName}</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    ستظهر هذه الرسالة فوراً في جرس الإشعارات لدى المستخدم لتشجيعه وتثبيته.
-                  </p>
+              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/80 px-5 py-4 dark:border-slate-800 dark:bg-slate-800/40 sm:px-6">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300">
+                      <MessageSquareHeart className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="truncate font-black text-slate-900 dark:text-white">
+                        المحادثة مع {selectedUser.displayName}
+                      </h3>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        رسالة ورد واحد من المستخدم لكل رسالة • تتحدث مباشرة
+                      </p>
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
+                    {selectedUserMessages.length} رسالة
+                  </span>
                 </div>
 
-                <form onSubmit={handleSendNote} className="space-y-3">
-                  <textarea
-                    rows={3}
-                    required
-                    placeholder={`اكتب رسالة تشجيعية لـ ${selectedUser.displayName}... (مثال: ما شاء الله على استمرارك اليومي، تقبل الله طاعتك ورزقك الثبات!)`}
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    className="w-full p-3.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-
-                  {noteSuccess && (
-                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs rounded-xl flex items-center gap-2 font-bold">
-                      <Check className="w-4 h-4 text-emerald-600" />
-                      <span>تم إرسال الملاحظة بنجاح وستصل للمستخدم في إشعاراته!</span>
+                <div className="max-h-[440px] space-y-5 overflow-y-auto bg-slate-50/60 p-4 dark:bg-slate-950/30 sm:p-5">
+                  {loadingUserMessages && (
+                    <p className="py-8 text-center text-sm text-slate-500">جارٍ تحميل المحادثة...</p>
+                  )}
+                  {userMessagesError && (
+                    <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                      تعذر تحميل المحادثة. تحقق من صلاحيات قاعدة البيانات.
+                    </p>
+                  )}
+                  {!loadingUserMessages && !userMessagesError && selectedUserMessages.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center dark:border-slate-700 dark:bg-slate-900">
+                      <MessageSquareHeart className="mx-auto h-8 w-8 text-emerald-500" />
+                      <p className="mt-2 text-sm font-bold text-slate-800 dark:text-slate-100">
+                        ابدأ محادثة مع {selectedUser.displayName}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        ستظهر الرسائل والردود هنا فور وصولها.
+                      </p>
                     </div>
                   )}
+                  {selectedUserMessages.map((message) => (
+                    <MessageThreadCard key={message.id} note={message} />
+                  ))}
+                </div>
 
-                  <button
-                    type="submit"
-                    disabled={noteSending || !noteText.trim()}
-                    className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>{noteSending ? 'جارٍ الإرسال...' : 'إرسال الرسالة التشجيعية'}</span>
-                  </button>
+                <form onSubmit={handleSendNote} className="space-y-3 border-t border-slate-100 p-4 dark:border-slate-800 sm:p-5">
+                  <label htmlFor="admin-chat-message" className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    رسالة جديدة
+                  </label>
+                  <textarea
+                    id="admin-chat-message"
+                    rows={3}
+                    maxLength={1000}
+                    required
+                    placeholder={`اكتب رسالة لـ ${selectedUser.displayName}...`}
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    className="w-full resize-y rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-sm font-medium text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-[10px] text-slate-400">{noteText.length}/1000</span>
+                    <button
+                      type="submit"
+                      disabled={noteSending || !noteText.trim()}
+                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>{noteSending ? 'جارٍ الإرسال...' : 'إرسال الرسالة'}</span>
+                    </button>
+                  </div>
+                  {noteSuccess && (
+                    <p role="status" className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-xs font-bold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      <Check className="h-4 w-4" />
+                      تم إرسال الرسالة بنجاح.
+                    </p>
+                  )}
+                  {noteError && (
+                    <p role="alert" className="rounded-xl bg-rose-50 p-3 text-xs font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                      {noteError}
+                    </p>
+                  )}
                 </form>
-              </div>
+              </section>
             </div>
           )}
         </div>

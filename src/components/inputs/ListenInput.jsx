@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useItemProgress } from '../../hooks/useItemProgress.js';
+import { fetchPlaylistDetails, extractPlaylistId } from '../../lib/youtubePlaylist.js';
 import {
   Video,
   Check,
@@ -10,10 +11,11 @@ import {
   ListPlus,
   SkipForward,
   RotateCcw,
-  Sparkles,
   ChevronRight,
   CheckCircle2,
   Trash2,
+  Loader2,
+  ListVideo,
 } from 'lucide-react';
 
 export function ListenInput({
@@ -40,6 +42,9 @@ export function ListenInput({
   const [newUrl, setNewUrl] = useState('');
   const [newDuration, setNewDuration] = useState(30);
   const [playlistEpisodesCount, setPlaylistEpisodesCount] = useState(5);
+  const [detectedPlaylist, setDetectedPlaylist] = useState(null);
+  const [detectingPlaylist, setDetectingPlaylist] = useState(false);
+  const [detectError, setDetectError] = useState(null);
   const [adding, setAdding] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
 
@@ -148,6 +153,55 @@ export function ListenInput({
     }
   };
 
+  // Auto-detect playlist details when URL changes or mode is playlist
+  const handleAutoDetectPlaylist = async (urlToDetect) => {
+    const targetUrl = urlToDetect || newUrl;
+    if (!targetUrl || !targetUrl.trim()) return;
+
+    const listId = extractPlaylistId(targetUrl);
+    if (!listId && addMode === 'playlist') {
+      setDetectError('يرجى إدخال رابط يوتيوب يحتوي على قائمة تشغيل (list=...)');
+      return;
+    }
+
+    setDetectingPlaylist(true);
+    setDetectError(null);
+    try {
+      const details = await fetchPlaylistDetails(targetUrl, newTitle);
+      if (details?.success) {
+        setDetectedPlaylist(details);
+        if (!newTitle.trim() || newTitle === 'قائمة تشغيل مرئية') {
+          setNewTitle(details.playlistTitle);
+        }
+        setPlaylistEpisodesCount(details.videoCount);
+        setNewDuration(details.averageDurationMin);
+        setAddMode('playlist');
+      }
+    } catch (err) {
+      console.warn('Playlist detection error:', err);
+      setDetectError('تم التعرف التقديري، يمكنك المتابعة أو الحفظ المباشر.');
+    } finally {
+      setDetectingPlaylist(false);
+    }
+  };
+
+  // Watch URL input for automatic playlist detection
+  useEffect(() => {
+    if (!newUrl) {
+      setDetectedPlaylist(null);
+      setDetectError(null);
+      return;
+    }
+
+    if (extractPlaylistId(newUrl)) {
+      setAddMode('playlist');
+      const timer = setTimeout(() => {
+        handleAutoDetectPlaylist(newUrl);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [newUrl]);
+
   // Form submit: Add single video or entire playlist
   const handleAddContent = async (e) => {
     e.preventDefault();
@@ -163,22 +217,37 @@ export function ListenInput({
           order: items.length + 1,
         });
       } else {
-        // Add playlist as structured series of lessons
-        const count = Math.max(2, Math.min(30, parseInt(playlistEpisodesCount, 10) || 5));
-        for (let i = 1; i <= count; i++) {
-          await saveActivityItem({
-            title: `${newTitle.trim()} - الحلقة ${i}`,
-            youtubeUrl: newUrl.trim() || 'https://www.youtube.com',
-            durationMin: parseInt(newDuration, 10) || 25,
-            order: items.length + i,
-            playlistTitle: newTitle.trim(),
-          });
+        // Automatically save all detected playlist items with their real titles & durations
+        if (detectedPlaylist?.items?.length > 0) {
+          for (let i = 0; i < detectedPlaylist.items.length; i++) {
+            const item = detectedPlaylist.items[i];
+            await saveActivityItem({
+              title: item.title,
+              youtubeUrl: item.youtubeUrl || newUrl.trim(),
+              durationMin: item.durationMin || parseInt(newDuration, 10) || 20,
+              order: items.length + i + 1,
+              playlistTitle: detectedPlaylist.playlistTitle || newTitle.trim(),
+            });
+          }
+        } else {
+          // Structured series fallback
+          const count = Math.max(2, Math.min(50, parseInt(playlistEpisodesCount, 10) || 5));
+          for (let i = 1; i <= count; i++) {
+            await saveActivityItem({
+              title: `${newTitle.trim()} - الحلقة ${i}`,
+              youtubeUrl: newUrl.trim() || 'https://www.youtube.com',
+              durationMin: parseInt(newDuration, 10) || 25,
+              order: items.length + i,
+              playlistTitle: newTitle.trim(),
+            });
+          }
         }
       }
       setNewTitle('');
       setNewUrl('');
+      setDetectedPlaylist(null);
       setShowAddForm(false);
-      setFeedbackMsg('تمت إضافة المحتوى المرئي بنجاح وحفظه في حسابك!');
+      setFeedbackMsg('تم حفظ مقاطع القائمة وتحديد مددها تلقائياً بنجاح!');
       setTimeout(() => setFeedbackMsg(null), 4000);
     } finally {
       setAdding(false);
@@ -197,7 +266,7 @@ export function ListenInput({
       {feedbackMsg && (
         <div className="p-3 bg-emerald-500 text-white font-bold text-xs rounded-2xl flex items-center justify-between gap-2 shadow-md animate-in fade-in">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>{feedbackMsg}</span>
           </div>
         </div>
@@ -259,6 +328,37 @@ export function ListenInput({
             </div>
           </div>
 
+          {/* Auto detection status feedback */}
+          {detectingPlaylist && (
+            <div className="p-3 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-800 rounded-2xl flex items-center gap-2.5 text-xs text-violet-700 dark:text-violet-300 font-bold animate-pulse">
+              <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+              <span>جارٍ قراءة قائمة التشغيل تلقائياً واستخراج عناوين المقاطع والمدد...</span>
+            </div>
+          )}
+
+          {detectedPlaylist && (
+            <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 rounded-2xl text-xs space-y-1.5">
+              <div className="flex items-center justify-between text-emerald-900 dark:text-emerald-200 font-black">
+                <span className="flex items-center gap-2">
+                  <ListVideo className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>تم التعرّف التلقائي: {detectedPlaylist.videoCount} مقاطع</span>
+                </span>
+                <span className="text-[11px] bg-emerald-200/60 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded-lg font-bold">
+                  متوسط المدة: {detectedPlaylist.averageDurationMin} دقيقة
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
+                تم استخراج كل فيديو بمدته الدقيقة وعنوانه تلقائياً دون الحاجة لإدخال يدوي.
+              </p>
+            </div>
+          )}
+
+          {detectError && (
+            <p className="text-[11px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-xl border border-amber-200 dark:border-amber-900">
+              {detectError}
+            </p>
+          )}
+
           <div>
             <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
               {addMode === 'single' ? 'عنوان الفيديو / الدرس' : 'عنوان السلسلة أو قائمة التشغيل'}
@@ -276,7 +376,7 @@ export function ListenInput({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                رابط يوتيوب (مقطع أو Playlist)
+                رابط يوتيوب (مقطع أو قائمة تشغيل)
               </label>
               <input
                 type="url"
@@ -289,7 +389,7 @@ export function ListenInput({
             </div>
             <div>
               <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                مدة المقطع (بالدقائق)
+                مدة المقطع (بالدقائق) {detectedPlaylist ? '• (محدد تلقائياً)' : ''}
               </label>
               <input
                 type="number"
@@ -304,19 +404,32 @@ export function ListenInput({
 
           {addMode === 'playlist' && (
             <div>
-              <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                عدد حلقات / مقاطع السلسلة
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  عدد مقاطع القائمة {detectedPlaylist ? '• (مكتشف تلقائياً)' : ''}
+                </label>
+                {extractPlaylistId(newUrl) && !detectingPlaylist && (
+                  <button
+                    type="button"
+                    onClick={() => handleAutoDetectPlaylist(newUrl)}
+                    className="text-[10px] text-violet-600 dark:text-violet-400 font-bold hover:underline cursor-pointer"
+                  >
+                    إعادة الفحص التلقائي ↻
+                  </button>
+                )}
+              </div>
               <input
                 type="number"
-                min={2}
-                max={30}
+                min={1}
+                max={100}
                 value={playlistEpisodesCount}
                 onChange={(e) => setPlaylistEpisodesCount(e.target.value)}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-center focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                سيتم توليد مقاطع القائمة وتتبع تقدم كل مقطع بالدقائق ونقل المستخدم تلقائياً للدرس التالي.
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block">
+                {detectedPlaylist
+                  ? 'تم استيراد قائمة التشغيل بكافة حلقاتها تلقائياً وتتبع دقائق مشاهدتها ونقل المستخدم تلقائياً للدرس التالي.'
+                  : 'بمجرد وضع رابط قائمة التشغيل، سيتم استكشاف عدد مقاطعها ومدتها تلقائياً دون إدخال يدوي.'}
               </span>
             </div>
           )}

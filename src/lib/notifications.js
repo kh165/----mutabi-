@@ -34,8 +34,8 @@ export function sendLocalNotification(title, body, tag = 'mutabi_worship') {
   try {
     const notification = new Notification(title, {
       body,
-      icon: '/assets/aistudio/image_862cf0fe.png',
-      badge: '/assets/aistudio/image_862cf0fe.png',
+      icon: '/pwa-192x192.png',
+      badge: '/favicon-48x48.png',
       tag,
       dir: 'rtl',
       lang: 'ar',

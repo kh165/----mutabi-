@@ -15,6 +15,7 @@ import { Logo } from './components/layout/Logo.jsx';
 import { Lock } from 'lucide-react';
 
 import { TasbeehPage } from './pages/TasbeehPage.jsx';
+import { PWAInstallBanner } from './components/layout/PWAInstallBanner.jsx';
 
 function getInitialTab() {
   const hash = window.location.hash.replace('#', '').trim();
@@ -120,6 +121,7 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <MainApp />
+        <PWAInstallBanner />
       </AuthProvider>
     </ThemeProvider>
   );

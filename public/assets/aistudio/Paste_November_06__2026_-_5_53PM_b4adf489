@@ -1,0 +1,916 @@
+<div align="center">
+
+# 🌙 مُتابِع (Mutabi')
+
+### منصّة متابعة الأنشطة اليومية — حفظ القرآن، قراءته، سماع الفيديوهات، وأي نشاط تحدده بنفسك
+
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore%20%7C%20Hosting-FFCA28?logo=firebase&logoColor=black)
+![Tailwind](https://img.shields.io/badge/Tailwind-CSS-06B6D4?logo=tailwindcss&logoColor=white)
+![RTL](https://img.shields.io/badge/RTL-Arabic%20First-10b981)
+![PWA](https://img.shields.io/badge/PWA-Installable-5A0FC8)
+
+</div>
+
+---
+
+## 📑 جدول المحتويات
+
+1. [نظرة عامة ورؤية المنتج](#1-نظرة-عامة-ورؤية-المنتج)
+2. [الأدوار والمستخدمون](#2-الأدوار-والمستخدمون)
+3. [قصص المستخدم (User Stories)](#3-قصص-المستخدم-user-stories)
+4. [المتطلبات الوظيفية](#4-المتطلبات-الوظيفية)
+5. [أنواع الأنشطة بالتفصيل](#5-أنواع-الأنشطة-بالتفصيل)
+6. [المتطلبات غير الوظيفية](#6-المتطلبات-غير-الوظيفية)
+7. [المعمارية (Architecture)](#7-المعمارية-architecture)
+8. [التقنيات المستخدمة](#8-التقنيات-المستخدمة)
+9. [نموذج البيانات (Firestore)](#9-نموذج-البيانات-firestore)
+10. [قواعد الأمان (Security Rules)](#10-قواعد-الأمان-security-rules)
+11. [الفهارس (Indexes)](#11-الفهارس-indexes)
+12. [التصميم وتجربة المستخدم](#12-التصميم-وتجربة-المستخدم)
+13. [خريطة الصفحات](#13-خريطة-الصفحات)
+14. [هيكل المشروع](#14-هيكل-المشروع)
+15. [منطق الأعمال (Business Logic)](#15-منطق-الأعمال-business-logic)
+16. [خطوات الإعداد والتشغيل](#16-خطوات-الإعداد-والتشغيل)
+17. [النشر (Deployment)](#17-النشر-deployment)
+18. [خطة التنفيذ (Milestones)](#18-خطة-التنفيذ-milestones)
+19. [معايير القبول](#19-معايير-القبول)
+20. [الاختبارات وضمان الجودة](#20-الاختبارات-وضمان-الجودة)
+21. [الأمان والخصوصية](#21-الأمان-والخصوصية)
+22. [التكلفة والحدود المجانية](#22-التكلفة-والحدود-المجانية)
+23. [خارطة الطريق المستقبلية](#23-خارطة-الطريق-المستقبلية)
+24. [الأسئلة الشائعة](#24-الأسئلة-الشائعة)
+25. [🤖 البرومبتات الجاهزة للـ AI](#25--البرومبتات-الجاهزة-للـ-ai)
+
+---
+
+## 1. نظرة عامة ورؤية المنتج
+
+**مُتابِع** هو تطبيق ويب بسيط وجميل يشبه نظام الـ To-Do List، لكنه مصمم للأنشطة **المتكررة والقابلة للقياس** (ورد يومي، حفظ، مشاهدة محتوى...) بدل المهام لمرة واحدة.
+
+**الفكرة المحورية:**
+- الأدمن يعرّف **الأنشطة** من لوحة تحكم (بدون تعديل كود).
+- كل مستخدم له **حساب مستقل** و**بيانات منفصلة** تمامًا.
+- الأدمن يقدر **يتابع تقدم كل المستخدمين** من نفس اللوحة.
+- كل البيانات على **Firebase** (سحابي، لحظي، ومجاني للبداية).
+
+**مبادئ التصميم:**
+| المبدأ | المعنى |
+|---|---|
+| البساطة | شاشة اليوم تعمل في أقل من 3 ضغطات لكل نشاط |
+| الجمال | هدوء بصري، ألوان مريحة، حركات ناعمة |
+| المرونة | أي نشاط جديد = إضافة من اللوحة فقط |
+| الخصوصية | كل مستخدم يرى بياناته فقط |
+| الشفافية | الأدمن يرى كل شيء بوضوح |
+
+---
+
+## 2. الأدوار والمستخدمون
+
+| الدور | الصلاحيات |
+|---|---|
+| **زائر** | صفحات الدخول والتسجيل فقط |
+| **مستخدم** | يرى الأنشطة الموجهة له، يسجل إنجازه، يرى إحصائياته وتاريخه، يعدل ملفه |
+| **أدمن** | كل ما سبق + إدارة الأنشطة والمحتوى + عرض بيانات كل المستخدم + تعطيل حسابات + ملاحظات للمستخدمين |
+
+> الأدمن يتحدد بوجود مستند في `admins/{uid}` ويُضاف **يدويًا** من Firebase Console (أو عبر سكربت)، ولا يمكن إنشاؤه من الموقع إطلاقًا.
+
+---
+
+## 3. قصص المستخدم (User Stories)
+
+### المستخدم
+- كمستخدم، أريد **التسجيل والدخول** بالإيميل أو جوجل لأحتفظ ببياناتي.
+- كمستخدم، أريد أن أرى **أنشطة اليوم** في شاشة واحدة وأسجل إنجازي بسرعة.
+- كمستخدم، أريد أن أرى **نسبة إنجازي اليومية** وStreak الاستمرار لأتحفز.
+- كمستخدم، أريد **سجل الحفظ** بالسورة والآيات لأعرف أين وصلت.
+- كمستخدم، أريد **تتبع ختمتي** (صفحات من 604) وأعرف النسبة المتبقية.
+- كمستخدم، أريد **مشاهدة فيديوهات** النشاط وتعليمها "تمت المشاهدة".
+- كمستخدم، أريد **تعديل أو حذف** تسجيل أخطأت فيه.
+- كمستخدم، أريد **رسوم بيانية** أسبوعية وشهرية لأرى تطوري.
+- كمستخدم، أريد **وضعًا ليليًا** وتصميمًا مريحًا على الموبايل.
+- كمستخدم، أريد **تصدير بياناتي** وحذف حسابي عند الرغبة.
+
+### الأدمن
+- كأدمن، أريد **إضافة وتعديل وتعطيل وحذف** الأنشطة بدون برمجة.
+- كأدمن، أريد **تحديد نوع النشاط** (حفظ/قراءة/سماع/مخصص) وهدفه اليومي ووحدته.
+- كأدمن، أريد **إضافة مكتبة فيديوهات** داخل نشاط السماع بروابط يوتيوب.
+- كأدمن، أريد **توجيه نشاط** لكل المستخدمين أو لمستخدمين محددين.
+- كأدمن، أريد **رؤية قائمة المستخدمين** مع نسبة التزام كل واحد وآخر نشاط له.
+- كأدمن، أريد **فتح تفاصيل أي مستخدم** وأرى سجله ورسومه البيانية.
+- كأدمن، أريد **كتابة ملاحظة/تشجيع** تظهر للمستخدم.
+- كأدمن، أريد **لوحة إحصائيات عامة** (نشطين اليوم، أكثر نشاط إنجازًا...).
+- كأدمن، أريد **تعطيل حساب** مستخدم مؤقتًا.
+- كأدمن، أريد **تصدير تقارير CSV**.
+
+---
+
+## 4. المتطلبات الوظيفية
+
+### 4.1 المصادقة (Auth)
+- [ ] تسجيل بالإيميل وكلمة المرور (مع التحقق من الصيغة وقوة كلمة المرور)
+- [ ] تسجيل الدخول بجوجل
+- [ ] نسيت كلمة المرور (Reset email)
+- [ ] تسجيل الخروج
+- [ ] إنشاء مستند `users/{uid}` تلقائيًا عند أول دخول
+- [ ] حماية المسارات (Protected Routes) + مسارات الأدمن (Admin Routes)
+- [ ] منع المستخدمين المعطّلين (`isDisabled`) من استخدام التطبيق
+
+### 4.2 صفحة اليوم (Today)
+- [ ] تعرض كروت الأنشطة المفعّلة والموجهة للمستخدم، مرتبة حسب `order`
+- [ ] كل كارت: أيقونة، لون، عنوان، هدف، تقدم حالي، إدخال سريع، زر "تم ✓"
+- [ ] شريط تقدم لكل نشاط + دائرة تقدم إجمالية لليوم
+- [ ] احتفال (Confetti) عند إتمام كل أهداف اليوم
+- [ ] تغيير اليوم (التنقل لأمس لتسجيل نشاط فاتك — اختياري بحد أقصى 7 أيام)
+- [ ] تحديث لحظي (Realtime)
+
+### 4.3 التقدم (Progress)
+- [ ] رسم بياني أسبوعي وشهري (Bar/Line)
+- [ ] Streak الحالي وأطول Streak
+- [ ] نسبة الالتزام لكل نشاط
+- [ ] خريطة حرارية للأيام (Heatmap على نمط GitHub)
+- [ ] أوسمة الإنجاز (Badges)
+
+### 4.4 السجل (History)
+- [ ] عرض الأيام السابقة بالتفصيل
+- [ ] فلترة حسب النشاط/الفترة
+- [ ] تعديل وحذف أي تسجيل
+
+### 4.5 الملف الشخصي
+- [ ] تعديل الاسم
+- [ ] اختيار الوضع (فاتح/ليلي/تلقائي)
+- [ ] ضبط المنطقة الزمنية (الافتراضي `Africa/Cairo`)
+- [ ] تصدير بياناتي (JSON/CSV)
+- [ ] حذف الحساب
+
+### 4.6 لوحة الأدمن
+- [ ] **لوحة عامة:** عدد المستخدمين، النشطين اليوم/الأسبوع، متوسط الالتزام، أعلى الأنشطة
+- [ ] **إدارة الأنشطة:** CRUD + ترتيب بالسحب والإفلات + تفعيل/تعطيل + توجيه (للكل/مختارين)
+- [ ] **إدارة محتوى السماع:** إضافة/حذف فيديوهات داخل نشاط
+- [ ] **المستخدمين:** جدول مع بحث وفرز وفلاتر + تعطيل/تفعيل
+- [ ] **تفاصيل مستخدم:** رسومه وسجله + إضافة ملاحظة له
+- [ ] **التقارير:** تصدير CSV
+
+---
+
+## 5. أنواع الأنشطة بالتفصيل
+
+الأدمن يختار **نوع النشاط** فيتغير شكل الإدخال تلقائيًا عند المستخدم:
+
+| النوع | `type` | وحدة القياس | واجهة الإدخال | ملاحظات |
+|---|---|---|---|---|
+| **حفظ القرآن** | `memorize` | آية | اختيار سورة + من آية + إلى آية + (جديد / مراجعة) | يعرض آخر موضع وصل له المستخدم |
+| **قراءة القرآن** | `read` | صفحة / جزء / حزب | عدد الصفحات أو (من صفحة – إلى صفحة) | تتبع **الختمة** من 604 صفحة وتتحول لختمة جديدة تلقائيًا |
+| **سماع/مشاهدة فيديوهات** | `listen` | فيديو / دقيقة | قائمة فيديوهات من الأدمن + زر "تمت المشاهدة" | مشغّل يوتيوب مدمج (iframe) |
+| **مخصص** | `custom` | صفحة / دقيقة / مرة / عدد | رقم بسيط أو Checkbox | لأي نشاط آخر (أذكار، صلاة نافلة، صدقة...) |
+
+**خيارات عامة لكل نشاط:**
+- وضع الإنجاز: `numeric` (رقم) أو `checkbox` (تم/لم يتم)
+- هدف يومي `dailyTarget` (اختياري لوضع checkbox)
+- الأيام المفعلة (مثلاً أيام الأسبوع فقط): `activeDays: [0..6]`
+- لون وأيقونة وترتيب
+
+> **بيانات القرآن:** يُضمَّن ملف ثابت `src/data/quran.ts` فيه الـ 114 سورة (الاسم، رقمها، عدد آياتها) وعدد صفحات المصحف (604) وأجزائه (30). **لا يُجلب من الإنترنت** لتجنب الاعتماد على خدمات خارجية.
+
+---
+
+## 6. المتطلبات غير الوظيفية
+
+| المحور | المتطلب |
+|---|---|
+| **الأداء** | تحميل أولي < 2 ثانية على 4G، Lighthouse Performance ≥ 90، Code-splitting للصفحات |
+| **التوافق** | Chrome/Safari/Firefox/Edge الحديثة، وموبايل أولًا (≥ 360px) |
+| **اللغة** | عربي RTL افتراضي (`dir="rtl"` و`lang="ar"`)، الكود جاهز لإضافة English لاحقًا (i18n) |
+| **إتاحة الوصول** | تباين ألوان كافٍ، دعم لوحة المفاتيح، `aria-label` للأزرار الأيقونية، احترام `prefers-reduced-motion` |
+| **الأمان** | Firestore Rules صارمة، لا أسرار في الكود، التحقق من المدخلات |
+| **الاعتمادية** | معالجة أخطاء الشبكة، رسائل واضحة، دعم Offline أساسي (Firestore persistence) |
+| **قابلية الصيانة** | TypeScript صارم، فصل المنطق عن الواجهة، تسمية واضحة، تعليقات للأجزاء المعقدة |
+| **التوسع** | يتحمل مئات المستخدمين بسهولة على الخطة المجانية |
+
+---
+
+## 7. المعمارية (Architecture)
+
+```mermaid
+flowchart LR
+    U[👤 مستخدم] -->|HTTPS| FH[Firebase Hosting<br/>React SPA / PWA]
+    A[🛡️ أدمن] -->|HTTPS| FH
+    FH --> AU[Firebase Auth]
+    FH --> FS[(Cloud Firestore)]
+    FS --> R{Security Rules}
+    R -->|مالك البيانات| U
+    R -->|isAdmin| A
+```
+
+**مبادئ:**
+- لا يوجد سيرفر مخصص (Serverless بالكامل).
+- كل الحماية على مستوى **Security Rules** (الواجهة وحدها لا تكفي).
+- الإحصائيات (Streak، النسب) تُحسب في العميل من السجلات؛ يمكن نقلها لـ Cloud Functions لاحقًا إن كبر الحجم.
+
+---
+
+## 8. التقنيات المستخدمة
+
+| الطبقة | التقنية |
+|---|---|
+| Framework | **React 18 + Vite + TypeScript (strict)** |
+| Styling | **Tailwind CSS** + `tailwindcss-rtl` / خصائص منطقية (`ms-`, `me-`, `ps-`, `pe-`) |
+| UI Components | **shadcn/ui** (اختياري) أو مكونات مخصصة |
+| Routing | React Router v6 |
+| State/Data | React Context للـ Auth + Hooks مخصصة مع `onSnapshot` |
+| Forms | React Hook Form + Zod (التحقق) |
+| Charts | Recharts |
+| Drag & Drop | `@dnd-kit/core` (ترتيب الأنشطة) |
+| Dates | `date-fns` + `date-fns-tz` |
+| Icons | lucide-react |
+| Animation | Framer Motion + `canvas-confetti` |
+| Toasts | `sonner` |
+| Backend | **Firebase** (Auth, Firestore, Hosting) |
+| PWA | `vite-plugin-pwa` |
+| Testing | Vitest + React Testing Library + Firebase Emulator |
+| Lint/Format | ESLint + Prettier |
+| الخط | **Cairo** (أو Tajawal) من Google Fonts |
+
+---
+
+## 9. نموذج البيانات (Firestore)
+
+```
+users/{uid}
+admins/{uid}
+activities/{activityId}
+  └─ items/{itemId}                 // فيديوهات نشاط السماع
+logs/{uid}_{activityId}_{YYYY-MM-DD}
+itemProgress/{uid}_{itemId}
+notes/{noteId}                      // ملاحظات الأدمن للمستخدم
+```
+
+### 9.1 `users/{uid}`
+```ts
+interface UserDoc {
+  displayName: string;
+  email: string;
+  photoURL?: string | null;
+  timezone: string;            // "Africa/Cairo"
+  theme: "light" | "dark" | "system";
+  isDisabled: boolean;         // الأدمن فقط يغيّرها
+  createdAt: Timestamp;
+  lastActiveAt: Timestamp;
+}
+```
+
+### 9.2 `admins/{uid}`
+```ts
+interface AdminDoc { createdAt: Timestamp; }   // وجود المستند = أدمن
+```
+
+### 9.3 `activities/{activityId}`
+```ts
+interface Activity {
+  title: string;                       // "حفظ القرآن"
+  description?: string;
+  type: "memorize" | "read" | "listen" | "custom";
+  inputMode: "numeric" | "checkbox";
+  unit: "ayah" | "page" | "juz" | "minute" | "video" | "time";
+  dailyTarget: number;                 // 0 لو بدون هدف
+  activeDays: number[];                // 0=الأحد .. 6=السبت (فارغ = كل الأيام)
+  icon: string;                        // اسم أيقونة lucide
+  color: string;                       // "#10b981"
+  link?: string | null;                // رابط خارجي اختياري
+  audience: "all" | "selected";
+  assignedUids: string[];              // مستخدمون محددون إن كان audience = selected
+  order: number;
+  isActive: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+### 9.4 `activities/{activityId}/items/{itemId}` (للسماع)
+```ts
+interface ActivityItem {
+  title: string;
+  youtubeUrl: string;
+  durationMin?: number;
+  order: number;
+  createdAt: Timestamp;
+}
+```
+
+### 9.5 `logs/{uid}_{activityId}_{date}`
+> المعرّف بهذا الشكل يضمن **سجلًا واحدًا لكل مستخدم/نشاط/يوم**، والتعديل يتم على نفس المستند.
+```ts
+interface Log {
+  uid: string;
+  activityId: string;
+  date: string;                        // "2026-11-06" بتوقيت المستخدم
+  amount: number;                      // الكمية المنجزة
+  completed: boolean;                  // amount >= dailyTarget أو checkbox
+  details?: {
+    // memorize
+    surah?: number; fromAyah?: number; toAyah?: number; kind?: "new" | "review";
+    // read
+    fromPage?: number; toPage?: number;
+  };
+  note?: string | null;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+### 9.6 `itemProgress/{uid}_{itemId}`
+```ts
+interface ItemProgress {
+  uid: string;
+  activityId: string;
+  itemId: string;
+  watchedAt: Timestamp;
+}
+```
+
+### 9.7 `notes/{noteId}`
+```ts
+interface AdminNote {
+  toUid: string;
+  fromUid: string;
+  text: string;
+  isRead: boolean;
+  createdAt: Timestamp;
+}
+```
+
+---
+
+## 10. قواعد الأمان (Security Rules)
+
+ملف `firestore.rules`:
+
+```js
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- Helpers ----------
+    function signedIn() { return request.auth != null; }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    function isAdmin() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function notDisabled() {
+      return !(get(/databases/$(database)/documents/users/$(request.auth.uid))
+                .data.get('isDisabled', false));
+    }
+    function unchanged(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
+    }
+
+    // ---------- users ----------
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid)
+                    && request.resource.data.isDisabled == false;
+      // المستخدم لا يستطيع تعديل isDisabled / createdAt
+      allow update: if (isOwner(uid) && unchanged('isDisabled') && unchanged('createdAt'))
+                    || isAdmin();
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // ---------- admins (للقراءة الذاتية فقط، الكتابة من Console) ----------
+    match /admins/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // ---------- activities ----------
+    match /activities/{activityId} {
+      allow read: if signedIn() && notDisabled();
+      allow write: if isAdmin();
+
+      match /items/{itemId} {
+        allow read: if signedIn() && notDisabled();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ---------- logs ----------
+    match /logs/{logId} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if signedIn() && notDisabled()
+                    && request.resource.data.uid == request.auth.uid
+                    && logId == request.auth.uid + '_' + request.resource.data.activityId
+                                + '_' + request.resource.data.date
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount >= 0
+                    && request.resource.data.amount <= 100000;
+      allow update: if signedIn() && notDisabled()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.amount is number
+                    && request.resource.data.amount >= 0;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // ---------- itemProgress ----------
+    match /itemProgress/{id} {
+      allow read: if signedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if signedIn() && notDisabled()
+                    && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ---------- notes ----------
+    match /notes/{noteId} {
+      allow read: if signedIn() && (resource.data.toUid == request.auth.uid || isAdmin());
+      allow create: if isAdmin();
+      // المستخدم يقدر فقط يعلّم الملاحظة كمقروءة
+      allow update: if (signedIn() && resource.data.toUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']))
+                    || isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
+```
+
+---
+
+## 11. الفهارس (Indexes)
+
+ملف `firestore.indexes.json`:
+
+```json
+{
+  "indexes": [
+    {
+      "collectionGroup": "logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "activityId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "activityId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "activities",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActive", "order": "ASCENDING" },
+        { "fieldPath": "order", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "notes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "toUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+```
+
+---
+
+## 12. التصميم وتجربة المستخدم
+
+### 12.1 الهوية البصرية
+| العنصر | القيمة |
+|---|---|
+| اللون الأساسي | زمردي `#10b981` (تدرجات 50–900) |
+| اللون الثانوي | ذهبي هادئ `#d4a373` |
+| خلفية فاتحة | `#faf8f5` (بيج دافئ) |
+| خلفية ليلية | `#0f172a` / `#111827` |
+| الخط | Cairo (400/600/700) |
+| الزوايا | `rounded-2xl` للكروت، `rounded-xl` للأزرار |
+| الظلال | خفيفة وناعمة (`shadow-sm` → `shadow-lg` عند Hover) |
+
+### 12.2 مبادئ الواجهة
+- **Mobile-first:** شريط تنقل سفلي (Bottom Nav) على الموبايل، وقائمة جانبية على الديسكتوب.
+- **أزرار كبيرة** (≥ 44px) سهلة اللمس.
+- **حركات ناعمة:** Check animation عند الإنجاز، Fade/Slide عند التنقل.
+- **حالات كاملة:** Loading (Skeleton)، Empty (رسالة ودودة + زر إجراء)، Error (رسالة + إعادة محاولة).
+- **تغذية راجعة فورية:** Toasts لكل عملية (تم الحفظ، حدث خطأ).
+- **Optimistic UI:** تحديث الواجهة فورًا قبل تأكيد الشبكة.
+- **نصوص عربية ودودة** (مثل: "ما شاء الله! أنجزت أهداف اليوم 🎉").
+
+### 12.3 المكونات الأساسية
+`ActivityCard` · `ProgressRing` · `StreakBadge` · `Heatmap` · `QuranPicker` (سورة/آيات) · `PageRangeInput` · `VideoList` · `ConfirmDialog` · `EmptyState` · `Skeleton` · `ThemeToggle` · `BottomNav` · `Sidebar` · `DataTable` (للأدمن)
+
+---
+
+## 13. خريطة الصفحات
+
+| المسار | الصفحة | الحماية |
+|---|---|---|
+| `/login` | تسجيل الدخول | عام |
+| `/register` | إنشاء حساب | عام |
+| `/forgot-password` | استعادة كلمة المرور | عام |
+| `/` | اليوم | مستخدم |
+| `/progress` | التقدم والإحصائيات | مستخدم |
+| `/history` | السجل | مستخدم |
+| `/profile` | الملف الشخصي | مستخدم |
+| `/admin` | لوحة عامة | أدمن |
+| `/admin/activities` | إدارة الأنشطة | أدمن |
+| `/admin/activities/:id/items` | محتوى نشاط السماع | أدمن |
+| `/admin/users` | المستخدمين | أدمن |
+| `/admin/users/:uid` | تفاصيل مستخدم | أدمن |
+| `/admin/reports` | التقارير والتصدير | أدمن |
+| `*` | 404 | عام |
+
+---
+
+## 14. هيكل المشروع
+
+```
+mutabi/
+├── .env.example
+├── .firebaserc
+├── firebase.json
+├── firestore.rules
+├── firestore.indexes.json
+├── vite.config.ts
+├── tailwind.config.ts
+├── scripts/
+│   └── make-admin.mjs              # سكربت لتعيين أدمن (Admin SDK)
+├── public/
+│   ├── icons/ (PWA icons)
+│   └── manifest.webmanifest
+└── src/
+    ├── main.tsx
+    ├── App.tsx
+    ├── firebase.ts
+    ├── data/
+    │   └── quran.ts                # 114 سورة + 604 صفحة + 30 جزء
+    ├── context/
+    │   ├── AuthContext.tsx         # user, isAdmin, loading
+    │   └── ThemeContext.tsx
+    ├── routes/
+    │   ├── ProtectedRoute.tsx
+    │   └── AdminRoute.tsx
+    ├── hooks/
+    │   ├── useActivities.ts
+    │   ├── useLogs.ts
+    │   ├── useStreak.ts
+    │   ├── useKhatma.ts
+    │   └── useItemProgress.ts
+    ├── lib/
+    │   ├── dates.ts                # تاريخ اليوم بتوقيت المستخدم
+    │   ├── stats.ts                # streak, completion rate
+    │   ├── badges.ts
+    │   ├── csv.ts
+    │   └── validators.ts           # Zod schemas
+    ├── types/index.ts
+    ├── components/
+    │   ├── ui/ ...
+    │   ├── ActivityCard.tsx
+    │   ├── inputs/ (MemorizeInput, ReadInput, ListenInput, CustomInput)
+    │   ├── ProgressRing.tsx
+    │   ├── Heatmap.tsx
+    │   └── layout/ (BottomNav, Sidebar, Shell)
+    └── pages/
+        ├── auth/ (Login, Register, ForgotPassword)
+        ├── Today.tsx  Progress.tsx  History.tsx  Profile.tsx  NotFound.tsx
+        └── admin/ (Dashboard, Activities, ActivityItems, Users, UserDetails, Reports)
+```
+
+---
+
+## 15. منطق الأعمال (Business Logic)
+
+### 15.1 اليوم والمنطقة الزمنية
+- التاريخ `YYYY-MM-DD` يُحسب بتوقيت `user.timezone` (الافتراضي `Africa/Cairo`)، **وليس UTC**، حتى لا يتغير "اليوم" في منتصف الليل بتوقيت خاطئ.
+
+### 15.2 اكتمال النشاط
+```
+completed = inputMode == "checkbox" ? checked
+          : dailyTarget > 0 ? amount >= dailyTarget
+          : amount > 0
+```
+
+### 15.3 الـ Streak
+- **اليوم يُحتسب** إذا أُنجز **نشاط واحد على الأقل** (أو كل الأهداف — يُضبط بإعداد واحد في الكود).
+- الأيام غير المفعلة للنشاط (`activeDays`) **لا تكسر** السلسلة.
+- Streak الحالي: عدد الأيام المتتالية حتى اليوم (أو أمس إن لم ينته اليوم بعد).
+- أطول Streak: أقصى سلسلة في السجل.
+
+### 15.4 الختمة
+- مجموع الصفحات المقروءة التراكمي ÷ 604. عند الوصول لـ 604 تُسجل ختمة وتبدأ التالية.
+- تُحسب من سجلات نشاط `read` بدلاً من تخزين عداد منفصل (لتجنب التضارب).
+
+### 15.5 الحفظ
+- يُعرض للمستخدم **آخر موضع**: (سورة X – آية Y) من آخر سجل `kind = new`.
+- التحقق: `fromAyah ≤ toAyah ≤ ayahCount(surah)`.
+- المراجعة تُحسب بشكل منفصل عن الحفظ الجديد في الإحصائيات.
+
+### 15.6 الأوسمة (Badges)
+| الوسام | الشرط |
+|---|---|
+| 🌱 البداية | أول تسجيل |
+| 🔥 أسبوع متواصل | Streak 7 |
+| 🌟 شهر متواصل | Streak 30 |
+| 📖 أول ختمة | 604 صفحة |
+| 🧠 حافظ الجزء | حفظ 20 صفحة تقريبًا (حسب البيانات) |
+| 🎯 يوم مثالي | إتمام كل أهداف اليوم |
+
+---
+
+## 16. خطوات الإعداد والتشغيل
+
+### 16.1 متطلبات
+- Node.js ≥ 20
+- حساب Google (لـ Firebase)
+- Firebase CLI: `npm i -g firebase-tools`
+
+### 16.2 إنشاء مشروع Firebase
+1. ادخل [Firebase Console](https://console.firebase.google.com) ← **Add project**.
+2. **Authentication** ← Sign-in method ← فعّل **Email/Password** و **Google**.
+3. **Firestore Database** ← Create database ← اختر أقرب منطقة (مثل `europe-west`) ← ابدأ بـ Production mode.
+4. **Project settings** ← Add app ← Web (`</>`) ← انسخ الـ config.
+
+### 16.3 التثبيت
+```bash
+git clone <repo> mutabi && cd mutabi
+npm install
+cp .env.example .env     # املأه بقيم Firebase
+npm run dev
+```
+
+### 16.4 `.env.example`
+```
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
+```
+
+### 16.5 رفع القواعد والفهارس
+```bash
+firebase login
+firebase use --add
+firebase deploy --only firestore:rules,firestore:indexes
+```
+
+### 16.6 تعيين أول أدمن
+**الطريقة 1 (يدوي):**
+1. سجّل حسابًا من الموقع.
+2. من Console ← Authentication انسخ **UID**.
+3. Firestore ← أنشئ collection اسمها `admins` ← مستند **ID = UID** ← حقل `createdAt` (timestamp).
+
+**الطريقة 2 (سكربت):** `node scripts/make-admin.mjs <UID>` باستخدام Admin SDK و service account (لا يُرفع للـ Git أبدًا).
+
+### 16.7 الإضافات اللازمة للتطوير
+```bash
+firebase emulators:start      # Auth + Firestore محليًا للاختبار
+```
+
+---
+
+## 17. النشر (Deployment)
+
+```bash
+npm run build
+firebase deploy --only hosting
+```
+
+**`firebase.json`:**
+```json
+{
+  "hosting": {
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "headers": [
+      { "source": "**/*.@(js|css|svg|png|woff2)",
+        "headers": [{ "key": "Cache-Control", "value": "public,max-age=31536000,immutable" }] }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
+```
+
+**CI/CD (اختياري):** GitHub Actions تنشر تلقائيًا عند كل push على `main` باستخدام `FirebaseExtended/action-hosting-deploy`.
+
+**نطاق مخصص:** Hosting ← Add custom domain.
+
+---
+
+## 18. خطة التنفيذ (Milestones)
+
+| # | المرحلة | المخرجات |
+|---|---|---|
+| **M0** | التأسيس | مشروع Vite + Tailwind RTL + Firebase + Routing + الثيم |
+| **M1** | المصادقة | تسجيل/دخول/جوجل/استعادة + AuthContext + حماية المسارات + isAdmin |
+| **M2** | إدارة الأنشطة (أدمن) | CRUD + ترتيب + تفعيل + أنواع الأنشطة |
+| **M3** | صفحة اليوم | كروت + إدخال لكل نوع + Realtime + Confetti |
+| **M4** | القرآن | بيانات السور + QuranPicker + الختمة + آخر موضع حفظ |
+| **M5** | السماع | مكتبة فيديوهات (أدمن) + مشغل + تعليم مشاهدة |
+| **M6** | التقدم والسجل | رسوم + Streak + Heatmap + History + تعديل/حذف + Badges |
+| **M7** | متابعة الأدمن | قائمة المستخدمين + التفاصيل + ملاحظات + تعطيل + إحصائيات + CSV |
+| **M8** | الصقل | PWA + Dark mode + Accessibility + Skeletons + تحسين الأداء |
+| **M9** | الاختبار والنشر | اختبارات + Emulator + Rules tests + Deploy |
+
+---
+
+## 19. معايير القبول
+
+**الأمان**
+- [ ] مستخدم عادي لا يستطيع فتح `/admin` ولا قراءة بيانات مستخدم آخر (حتى من Console المتصفح).
+- [ ] لا يمكن لمستخدم تعيين نفسه أدمن أو تغيير `isDisabled`.
+- [ ] المستخدم المعطّل لا يستطيع الكتابة.
+
+**الوظائف**
+- [ ] نشاط جديد من الأدمن يظهر عند المستخدمين المستهدفين لحظيًا.
+- [ ] تسجيل الإنجاز يُحفظ ويتحدث لو تغيّر في نفس اليوم (سجل واحد فقط).
+- [ ] التحقق من نطاق الآيات صحيح (لا يقبل آية خارج السورة).
+- [ ] الختمة والـ Streak يُحسبان صحيحًا بتوقيت المستخدم.
+- [ ] فيديو السماع يعمل ويمكن تعليمه كمشاهد.
+- [ ] الأدمن يرى تقدم كل مستخدم ويصدّر CSV.
+
+**التجربة**
+- [ ] الموقع RTL بالكامل وسليم على الموبايل.
+- [ ] الوضع الليلي يعمل في كل الصفحات.
+- [ ] Lighthouse: Performance ≥ 90، Accessibility ≥ 95.
+- [ ] قابل للتثبيت كـ PWA.
+
+---
+
+## 20. الاختبارات وضمان الجودة
+
+| النوع | الأداة | ماذا يُختبر |
+|---|---|---|
+| Unit | Vitest | `stats.ts` (streak/completion)، `dates.ts`، `quran.ts` validators |
+| Component | React Testing Library | ActivityCard، المدخلات، الفورمات |
+| Rules | `@firebase/rules-unit-testing` + Emulator | كل قاعدة أمان (مسموح/ممنوع) |
+| E2E (اختياري) | Playwright | دخول ← تسجيل نشاط ← ظهور في التقدم |
+
+**حالات Streak الحرجة للاختبار:** عبور منتصف الليل، يوم فائت، نشاط بأيام محددة، تغيّر المنطقة الزمنية.
+
+---
+
+## 21. الأمان والخصوصية
+
+- ✅ **Security Rules** هي خط الدفاع الأساسي (قسم 10).
+- ✅ مفاتيح Firebase Web **ليست أسرارًا** (تُحمى بالقواعد)، أما **Service Account** فلا يُرفع للـ Git أبدًا.
+- ✅ تفعيل **Firebase App Check** (reCAPTCHA v3) لمنع إساءة استخدام الـ API.
+- ✅ تقييد الـ API key على نطاقك من Google Cloud Console.
+- ✅ تحقق Zod من كل المدخلات في الواجهة + قواعد التحقق في Firestore.
+- ✅ لا تُعرض بيانات مستخدم لآخر بأي شكل.
+- ✅ حق الحذف: زر "حذف حسابي" يمسح بيانات المستخدم (users, logs, itemProgress) ثم حساب Auth.
+- ✅ سياسة خصوصية مختصرة في الفوتر.
+
+---
+
+## 22. التكلفة والحدود المجانية
+
+الخطة المجانية (**Spark**) تكفي بسهولة لمئات المستخدمين:
+
+| الخدمة | الحد المجاني التقريبي |
+|---|---|
+| Firestore | 50,000 قراءة/يوم، 20,000 كتابة/يوم، 1 GiB تخزين |
+| Auth | مجاني لمعظم طرق الدخول (الإيميل وجوجل) |
+| Hosting | 10 GB تخزين و~360 MB/يوم نقل |
+
+**نصائح لتقليل القراءات:** تفعيل Firestore persistence، تحميل سجلات آخر 30–90 يوم فقط، استخدام `limit()`، وتجنب listeners غير الضرورية.
+
+> الأرقام قابلة للتغيير؛ راجع صفحة أسعار Firebase الرسمية قبل الإطلاق.
+
+---
+
+## 23. خارطة الطريق المستقبلية
+
+- 🔔 تذكيرات يومية (FCM Push Notifications)
+- 🏆 لوحة شرف وتحديات أسبوعية/جماعية
+- 👥 مجموعات/حلقات (أدمن لكل مجموعة)
+- 🎙️ رفع تسجيلات صوتية للتسميع
+- 📅 تقويم هجري
+- 🌍 دعم الإنجليزية (i18n)
+- 📊 تقارير أسبوعية تلقائية بالإيميل (Cloud Functions)
+- 📱 تطبيق موبايل (Capacitor)
+
+---
+
+## 24. الأسئلة الشائعة
+
+**هل أحتاج سيرفر؟** لا، Firebase يتولى كل شيء.
+
+**كيف أضيف نشاطًا جديدًا؟** من `/admin/activities` ← "نشاط جديد". لا تعديل في الكود.
+
+**هل أقدر أخلي نشاط لشخص معين فقط؟** نعم: `audience = selected` واختر المستخدمين.
+
+**هل بيانات المستخدمين منفصلة فعلًا؟** نعم، مفروض بقواعد Firestore على مستوى السيرفر.
+
+**ماذا لو نسي مستخدم تسجيل يوم أمس؟** يقدر يسجله خلال آخر 7 أيام (قابل للضبط).
+
+**كيف أضيف أدمن ثانٍ؟** أضف مستند `admins/{uid}` من Console.
+
+---
+
+# 25. 🤖 البرومبتات الجاهزة للـ AI
+
+## 25.1 البرومبت الرئيسي (للتنفيذ الكامل)
+
+```text
+You are a senior full-stack engineer. Build a complete, production-ready web app
+named "Mutabi'" (مُتابِع) exactly according to the README specification I'm giving you
+(treat the README as the source of truth, and ask nothing unless something is
+truly contradictory).
+
+Goal: an Arabic (RTL), mobile-first daily activities tracker (a "different kind of
+to-do app") for Quran memorization, Quran reading (khatma tracking), listening to
+videos, and custom activities. Admin defines activities; each user has isolated
+data; admin can follow every user's progress.
+
+Tech: React 18 + Vite + TypeScript (strict), Tailwind CSS (RTL via logical
+properties), React Router v6, React Hook Form + Zod, Recharts, date-fns(-tz),
+@dnd-kit, lucide-react, framer-motion, canvas-confetti, sonner, vite-plugin-pwa,
+Firebase (Auth: email/password + Google, Firestore, Hosting). Font: Cairo.
+
+Requirements:
+1. Implement every section of the README: roles, functional requirements, activity
+   types (memorize/read/listen/custom) with their specific input UIs, business
+   logic (timezone-aware dates, completion, streaks, khatma, memorization last
+   position, badges), pages and routes, project structure.
+2. Use the exact Firestore data model, security rules, and indexes from the README.
+   Admin = existence of `admins/{uid}` document (never writable from the client).
+3. Bundle static Quran data (114 surahs with ayah counts, 604 pages, 30 juz) in
+   src/data/quran.ts - no external API.
+4. Realtime listeners (onSnapshot) with optimistic UI, loading skeletons, empty
+   and error states, friendly Arabic copy, toasts, dark mode, accessibility
+   (aria labels, keyboard, reduced motion), and a PWA setup.
+5. Admin panel: dashboard stats, activities CRUD with drag-drop ordering and
+   audience targeting, video library for listen activities, users table with
+   search/sort/disable, user details with charts + admin notes, CSV export.
+6. Include unit tests (stats, dates, quran validators) and Firestore rules tests
+   using the emulator.
+7. Deliver: complete source code following the README folder structure,
+   .env.example, firestore.rules, firestore.indexes.json, firebase.json,
+   scripts/make-admin.mjs, and concise setup + deploy instructions.
+
+Work plan: first output a brief implementation plan following the README
+milestones M0..M9, then produce all files milestone by milestone. Code must be
+clean, typed, and commented only where non-obvious. Do not use localStorage for
+auth state; rely on Firebase persistence.
+```
+
+## 25.2 برومبت مرحلي (لو الـ AI بيقطع في النص)
+
+```text
+Using the attached README as the spec, implement ONLY milestone <M#> now
+(<اسم المرحلة>). Output all files created/changed with full contents. Assume
+previous milestones are already done and working. At the end, list what to test
+manually.
+```
+
+## 25.3 برومبت المراجعة الأمنية
+
+```text
+Review the Firestore security rules and the client code of this project against
+the README. Try to find ways a normal user could: read another user's logs,
+become admin, edit isDisabled, write logs with a forged uid, or exceed amount
+limits. For every issue, show the exploit idea and the exact fix. Then write
+rules-unit-testing tests that cover each case.
+```
+
+## 25.4 برومبت التصميم
+
+```text
+Polish the UI of the app to look calm, modern, and premium: emerald + soft gold
+palette, Cairo font, rounded-2xl cards, subtle shadows, smooth framer-motion
+transitions, bottom nav on mobile and sidebar on desktop, great dark mode, and
+delightful micro-interactions (check animation, confetti when all daily goals are
+done). Keep it fully RTL and WCAG AA accessible. Show the changed files only.
+```
+
+---
+
+<div align="center">
+
+**صُنع بـ ❤️ لمتابعة الخير والاستمرار عليه**
+
+</div>

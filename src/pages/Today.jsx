@@ -204,16 +204,16 @@ export function Today({ onNavigateToTasbeeh }) {
               <button
                 type="button"
                 onClick={() => setQuranModalOpen(true)}
-                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-xl bg-emerald-500/30 flex items-center justify-center shrink-0">
                   <BookOpen className="w-4 h-4 text-emerald-300" />
                 </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] font-bold text-white group-hover:text-emerald-200 truncate">
+                <div className="flex-1 min-w-0">
+                  <span className="block text-xs font-bold text-white group-hover:text-emerald-200 leading-snug whitespace-normal break-words">
                     المصحف الشريف
                   </span>
-                  <span className="block text-[9px] text-emerald-200/70">تلاوة وراحة عين</span>
+                  <span className="block text-[10px] text-emerald-200/80 leading-tight whitespace-normal">تلاوة وراحة عين</span>
                 </div>
               </button>
 
@@ -221,16 +221,16 @@ export function Today({ onNavigateToTasbeeh }) {
               <button
                 type="button"
                 onClick={onNavigateToTasbeeh}
-                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-xl bg-teal-500/30 flex items-center justify-center shrink-0">
                   <CircleDot className="w-4 h-4 text-teal-300" />
                 </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] font-bold text-white group-hover:text-teal-200 truncate">
+                <div className="flex-1 min-w-0">
+                  <span className="block text-xs font-bold text-white group-hover:text-teal-200 leading-snug whitespace-normal break-words">
                     المسبحة الذكية
                   </span>
-                  <span className="block text-[9px] text-teal-200/70">عداد وسجل الذكر</span>
+                  <span className="block text-[10px] text-teal-200/80 leading-tight whitespace-normal">عداد وسجل الذكر</span>
                 </div>
               </button>
 
@@ -241,16 +241,16 @@ export function Today({ onNavigateToTasbeeh }) {
                   setAdhkarInitialCategory(new Date().getHours() < 13 ? 'morning' : 'evening');
                   setAdhkarModalOpen(true);
                 }}
-                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
                   <SunMedium className="w-4 h-4 text-amber-300" />
                 </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] font-bold text-white group-hover:text-amber-200 truncate">
+                <div className="flex-1 min-w-0">
+                  <span className="block text-xs font-bold text-white group-hover:text-amber-200 leading-snug whitespace-normal break-words">
                     حصن المسلم
                   </span>
-                  <span className="block text-[9px] text-amber-200/70">أذكار الصباح والمساء</span>
+                  <span className="block text-[10px] text-amber-200/80 leading-tight whitespace-normal">أذكار الصباح والمساء</span>
                 </div>
               </button>
 
@@ -258,16 +258,16 @@ export function Today({ onNavigateToTasbeeh }) {
               <button
                 type="button"
                 onClick={() => setActiveMainView(activeMainView === 'daily' ? 'calendar' : 'daily')}
-                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none cursor-pointer"
               >
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/30 flex items-center justify-center shrink-0">
                   <CalendarDays className="w-4 h-4 text-indigo-300" />
                 </div>
-                <div className="min-w-0">
-                  <span className="block text-[11px] font-bold text-white group-hover:text-indigo-200 truncate">
+                <div className="flex-1 min-w-0">
+                  <span className="block text-xs font-bold text-white group-hover:text-indigo-200 leading-snug whitespace-normal break-words">
                     تقويم العبادات
                   </span>
-                  <span className="block text-[9px] text-indigo-200/70">الصلوات والصيام</span>
+                  <span className="block text-[10px] text-indigo-200/80 leading-tight whitespace-normal">الصلوات والصيام</span>
                 </div>
               </button>
             </div>

@@ -5,7 +5,6 @@ import {
   Moon,
   CheckCircle2,
   RotateCcw,
-  Sparkles,
   X,
   Type,
   Eye,
@@ -302,7 +301,7 @@ export function AdhkarReaderModal({ isOpen, onClose, initialCategory = 'morning'
                 {/* Virtue footnote */}
                 {dhikr.virtue && (
                   <div className="mt-3 pt-2.5 border-t border-current/10 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     <span>الفضل: {dhikr.virtue}</span>
                   </div>
                 )}

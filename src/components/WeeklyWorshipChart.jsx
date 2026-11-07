@@ -10,7 +10,7 @@ import {
   Area,
   CartesianGrid,
 } from 'recharts';
-import { TrendingUp, BarChart3, LineChart, Sparkles } from 'lucide-react';
+import { TrendingUp, BarChart3, LineChart } from 'lucide-react';
 
 export function WeeklyWorshipChart({ weeklyData = [], isDark = false }) {
   const [chartType, setChartType] = useState('bar'); // 'bar' | 'area'

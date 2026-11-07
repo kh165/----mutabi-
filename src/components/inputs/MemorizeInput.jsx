@@ -85,7 +85,7 @@ export function MemorizeInput({
               : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
           }`}
         >
-          حفظ جديد ✨
+          حفظ جديد 📖
         </button>
         <button
           type="button"

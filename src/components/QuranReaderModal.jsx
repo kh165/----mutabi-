@@ -15,7 +15,6 @@ import {
   Play,
   Pause,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react';
 
 export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLogPagesRead }) {

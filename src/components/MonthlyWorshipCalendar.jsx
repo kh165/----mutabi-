@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   Calendar as CalendarIcon,
   Moon,
-  Sparkles,
   CheckCircle2,
   XCircle,
   Users,

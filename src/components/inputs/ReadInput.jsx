@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TOTAL_PAGES } from '../../data/quran.js';
-import { BookOpen, Check, AlertCircle, RotateCcw, Moon, Sparkles } from 'lucide-react';
+import { BookOpen, Check, AlertCircle, RotateCcw, Moon } from 'lucide-react';
 import { QuranReaderModal } from '../QuranReaderModal.jsx';
 
 export function ReadInput({

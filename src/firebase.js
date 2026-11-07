@@ -12,11 +12,17 @@ import {
 export const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with persistent offline & multiple-tab cache for instant queries
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-  }),
-});
+export const db = initializeFirestore(
+  app,
+  {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  },
+  firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+    ? firebaseConfig.firestoreDatabaseId
+    : undefined
+);
 
 export const auth = getAuth(app);
 

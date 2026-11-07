@@ -8,7 +8,6 @@ import {
   Trash2,
   BookOpen,
   Video,
-  Sparkles,
   CheckCircle2,
   Calendar,
   Moon,
@@ -214,8 +213,19 @@ export function History() {
                         </div>
                       )}
 
+                      {/* Video / Listening Details */}
+                      {log.details?.lastWatchedTitle && (
+                        <div className="flex items-center gap-2 text-violet-700 dark:text-violet-300">
+                          <Video className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
+                          <span>
+                            {log.details.lastWatchedTitle}
+                            {log.details.minutesListened ? ` (${log.details.minutesListened} دقيقة)` : ''}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Generic amount if not prayers/read range */}
-                      {!log.details?.fromPage && !log.details?.surah && !log.details?.prayers && log.amount > 0 && (
+                      {!log.details?.fromPage && !log.details?.surah && !log.details?.prayers && !log.details?.lastWatchedTitle && log.amount > 0 && (
                         <div>
                           الكمية المنجزة: <span className="font-bold text-slate-900 dark:text-white">{log.amount}</span>
                         </div>

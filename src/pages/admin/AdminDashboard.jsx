@@ -25,7 +25,7 @@ import {
   Users,
   Shield,
   Layers,
-  Sparkles,
+  CircleDot,
   Search,
   Plus,
   Trash2,
@@ -67,7 +67,7 @@ export const ICON_CATEGORIES = [
     icons: [
       { id: 'SunMedium', label: 'أذكار الصباح والمساء' },
       { id: 'Moon', label: 'قيام الليل والوتر' },
-      { id: 'Sparkles', label: 'تسبيح وتهليل واستغفار' },
+      { id: 'CircleDot', label: 'تسبيح وتهليل واستغفار' },
       { id: 'Heart', label: 'إخلاص النية وصلاح القلب' },
     ],
   },
@@ -590,7 +590,7 @@ export function AdminDashboard() {
                       const log = inspectedLogsMap.get(act.id);
                       const isDone = log && log.completed;
                       const hasLog = !!log;
-                      const IconComp = LucideIcons[act.icon] || LucideIcons.Sparkles;
+                      const IconComp = LucideIcons[act.icon] || LucideIcons.CircleDot;
 
                       return (
                         <div
@@ -913,7 +913,7 @@ export function AdminDashboard() {
                 onClick={handleSeedPresets}
                 className="py-2.5 px-5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs shrink-0 disabled:opacity-50 flex items-center gap-1.5"
               >
-                <Sparkles className="w-4 h-4" />
+                <Award className="w-4 h-4" />
                 <span>{seeding ? 'جارٍ الحفظ...' : 'تهيئة الأنشطة المقترحة'}</span>
               </button>
             </div>
@@ -955,7 +955,7 @@ export function AdminDashboard() {
                     unit: 'ayah',
                     dailyTarget: 5,
                     activeDays: [],
-                    icon: 'Sparkles',
+                    icon: 'BookOpen',
                     color: '#10b981',
                     audience: 'all',
                     assignedUids: [],
@@ -981,7 +981,7 @@ export function AdminDashboard() {
               </div>
             ) : (
               activities.map((act, idx) => {
-                const IconComp = LucideIcons[act.icon] || LucideIcons.Sparkles;
+                const IconComp = LucideIcons[act.icon] || LucideIcons.CircleDot;
                 return (
                   <div
                     key={act.id}
@@ -1123,7 +1123,7 @@ export function AdminDashboard() {
                   onClick={seedDefaultPhrases}
                   className="py-2 px-4 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-bold rounded-xl border border-emerald-200 dark:border-emerald-800 inline-flex items-center gap-1.5"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
+                  <Heart className="w-3.5 h-3.5" />
                   <span>تهيئة باقة عبارات تشجيعية مقترحة</span>
                 </button>
               </div>
@@ -1334,7 +1334,7 @@ export function AdminDashboard() {
                       </span>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                         {cat.icons.map((ic) => {
-                          const IconC = LucideIcons[ic.id] || LucideIcons.Sparkles;
+                          const IconC = LucideIcons[ic.id] || LucideIcons.CircleDot;
                           const isSelected = editingActivity.icon === ic.id;
                           return (
                             <button

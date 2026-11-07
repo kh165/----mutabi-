@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { TOTAL_PAGES } from '../../data/quran.js';
-import { BookOpen, Check, AlertCircle, RotateCcw } from 'lucide-react';
+import { BookOpen, Check, AlertCircle, RotateCcw, Moon, Sparkles } from 'lucide-react';
+import { QuranReaderModal } from '../QuranReaderModal.jsx';
 
 export function ReadInput({
   currentLog,
@@ -10,6 +11,7 @@ export function ReadInput({
   onClose,
   dailyTarget = 4,
 }) {
+  const [quranReaderOpen, setQuranReaderOpen] = useState(false);
   const [entryMode, setEntryMode] = useState(
     currentLog?.details?.fromPage ? 'range' : 'count'
   );
@@ -71,6 +73,35 @@ export function ReadInput({
           </span>
         </div>
       )}
+
+      {/* Reader Launch Button */}
+      <button
+        type="button"
+        onClick={() => setQuranReaderOpen(true)}
+        className="w-full py-3 px-4 bg-gradient-to-l from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white font-bold text-xs rounded-2xl flex items-center justify-between shadow-sm transition-all"
+      >
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4" />
+          <span>فتح المصحف الشريف للقراءة (الوضع الليلي وراحة العين)</span>
+        </div>
+        <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
+          <Moon className="w-3 h-3" />
+          <span>تحكم بالخط والإضاءة</span>
+        </span>
+      </button>
+
+      {/* Quran Reader Modal */}
+      <QuranReaderModal
+        isOpen={quranReaderOpen}
+        onClose={() => setQuranReaderOpen(false)}
+        initialSurahNumber={1}
+        onLogPagesRead={(surah) => {
+          setEntryMode('range');
+          setFromPage(surah.startPage);
+          setToPage(surah.startPage + 1);
+          setNote(`قراءة سورة ${surah.name}`);
+        }}
+      />
 
       {/* Mode Toggle */}
       <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">

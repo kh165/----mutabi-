@@ -31,11 +31,13 @@ export function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState(null);
+  const [accountNotFound, setAccountNotFound] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLocalError(null);
+    setAccountNotFound(false);
     setLoading(true);
 
     try {
@@ -53,7 +55,19 @@ export function AuthPage() {
         setResetSent(true);
       }
     } catch (err) {
-      setLocalError(err?.message || 'حدث خطأ أثناء المعالجة');
+      const code = err?.code || '';
+      const msg = err?.message || '';
+      if (
+        mode === 'login' &&
+        (code === 'auth/user-not-found' ||
+          code === 'auth/invalid-credential' ||
+          msg.includes('user-not-found') ||
+          msg.includes('invalid-credential'))
+      ) {
+        setAccountNotFound(true);
+      } else {
+        setLocalError(err?.message || 'حدث خطأ أثناء المعالجة');
+      }
     } finally {
       setLoading(false);
     }
@@ -258,7 +272,30 @@ export function AuthPage() {
             </div>
           )}
 
-          {(localError || authError) && (
+          {accountNotFound && mode === 'login' && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-2xl text-xs space-y-2.5 text-amber-900 dark:text-amber-200">
+              <div className="flex items-center gap-2 font-bold">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>هذا الحساب غير مسجل لدينا في المنصة بعد</span>
+              </div>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                لم نجد حساباً مسجلاً بالبريد الإلكتروني المدخل. يمكنك إنشاء حساب جديد مجاناً والانطلاق فوراً في وردك اليومي.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('register');
+                  setAccountNotFound(false);
+                  setLocalError(null);
+                }}
+                className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5"
+              >
+                <span>إنشاء حساب جديد بهذا البريد الآن ↗</span>
+              </button>
+            </div>
+          )}
+
+          {(localError || authError) && !accountNotFound && (
             <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{localError || authError}</span>

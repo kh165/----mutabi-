@@ -81,15 +81,35 @@
     },
     "ItemProgress": {
       "title": "ItemProgress",
-      "description": "Record of a video marked as watched by a user",
+      "description": "Record of a video watch progress and minutes listened by a user",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
         "activityId": { "type": "string", "maxLength": 128 },
         "itemId": { "type": "string", "maxLength": 128 },
-        "watchedAt": { "type": "string", "format": "date-time" }
+        "playlistId": { "type": "string", "maxLength": 128 },
+        "minutesListened": { "type": "number" },
+        "durationMin": { "type": "number" },
+        "percentage": { "type": "number" },
+        "isCompleted": { "type": "boolean" },
+        "watchedAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid", "activityId", "itemId"]
+    },
+    "MediaPlaylist": {
+      "title": "MediaPlaylist",
+      "description": "Audio/video playlist or series containing multiple lessons",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "playlistUrl": { "type": "string", "maxLength": 500 },
+        "category": { "type": "string", "maxLength": 100 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title"]
     },
     "AdminNote": {
       "title": "AdminNote",
@@ -128,7 +148,11 @@
     },
     "/itemProgress/{id}": {
       "schema": "ItemProgress",
-      "description": "Video watch status keyed by {uid}_{itemId}"
+      "description": "Video watch status and minutes listened keyed by {uid}_{itemId}"
+    },
+    "/mediaPlaylists/{playlistId}": {
+      "schema": "MediaPlaylist",
+      "description": "Video playlists and structured series"
     },
     "/notes/{noteId}": {
       "schema": "AdminNote",

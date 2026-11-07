@@ -30,7 +30,7 @@ export function ActivityCard({
   const currentAmount = log?.amount || 0;
 
   // Render dynamic Lucide icon
-  const IconComponent = LucideIcons[activity.icon] || LucideIcons.Sparkles;
+  const IconComponent = LucideIcons[activity.icon] || LucideIcons.CheckCircle2;
 
   const getUnitName = (unit) => {
     switch (unit) {
@@ -279,11 +279,11 @@ export function ActivityCard({
               <button
                 type="button"
                 onClick={handleResetLog}
-                className="px-2.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1 transition-all"
+                className="px-2.5 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1 transition-all shrink-0"
                 title="تراجع عن تسجيل هذا اليوم والبدء من جديد"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                <span className="hidden sm:inline">إلغاء</span>
+                <RotateCcw className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+                <span className="text-[11px]">تراجع</span>
               </button>
             )}
 

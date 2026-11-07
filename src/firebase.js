@@ -3,11 +3,21 @@ import { getAuth } from 'firebase/auth';
 import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
+
 export const app = initializeApp(firebaseConfig);
-export const db =
-  firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-    ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-    : getFirestore(app);
+
+// Initialize Firestore with persistent offline & multiple-tab cache for instant queries
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
+
 export const auth = getAuth(app);
 
 export const OperationType = {
@@ -40,14 +50,13 @@ export function handleFirestoreError(error, operationType, path) {
   return new Error(errInfo.error);
 }
 
-export async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Connecting to server...');
-    }
-  }
+export function testConnection() {
+  // Silent non-blocking health check
+  setTimeout(async () => {
+    try {
+      await getDocFromServer(doc(db, 'test', 'connection'));
+    } catch (_) {}
+  }, 1000);
 }
 
 testConnection();

@@ -16,10 +16,41 @@ import { Lock } from 'lucide-react';
 
 import { TasbeehPage } from './pages/TasbeehPage.jsx';
 
+function getInitialTab() {
+  const hash = window.location.hash.replace('#', '').trim();
+  const validTabs = ['today', 'tasbeeh', 'progress', 'history', 'profile', 'admin'];
+  if (hash && validTabs.includes(hash)) return hash;
+  try {
+    const saved = localStorage.getItem('mutabi_active_tab');
+    if (saved && validTabs.includes(saved)) return saved;
+  } catch {}
+  return 'today';
+}
+
 function MainApp() {
   const { user, userDoc, loading, isAdmin, logout } = useAuth();
   const { logs } = useLogs();
-  const [currentTab, setCurrentTab] = useState('today');
+  const [currentTab, setCurrentTabState] = useState(getInitialTab);
+
+  const handleSelectTab = (tabId) => {
+    setCurrentTabState(tabId);
+    try {
+      localStorage.setItem('mutabi_active_tab', tabId);
+      window.location.hash = tabId;
+    } catch {}
+  };
+
+  React.useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace('#', '').trim();
+      const validTabs = ['today', 'tasbeeh', 'progress', 'history', 'profile', 'admin'];
+      if (hash && validTabs.includes(hash)) {
+        setCurrentTabState(hash);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   const todayStr = getTodayDateString(userDoc?.timezone);
   const { currentStreak } = calculateStreaks(logs, todayStr);
@@ -71,15 +102,15 @@ function MainApp() {
   return (
     <Shell
       currentTab={currentTab}
-      onSelectTab={setCurrentTab}
+      onSelectTab={handleSelectTab}
       currentStreak={currentStreak}
     >
-      {currentTab === 'today' && <Today onNavigateToTasbeeh={() => setCurrentTab('tasbeeh')} />}
+      {currentTab === 'today' && <Today onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')} />}
       {currentTab === 'tasbeeh' && <TasbeehPage />}
       {currentTab === 'progress' && <Progress />}
       {currentTab === 'history' && <History />}
       {currentTab === 'profile' && <Profile />}
-      {currentTab === 'admin' && (isAdmin ? <AdminDashboard /> : <Today onNavigateToTasbeeh={() => setCurrentTab('tasbeeh')} />)}
+      {currentTab === 'admin' && (isAdmin ? <AdminDashboard /> : <Today onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')} />)}
     </Shell>
   );
 }

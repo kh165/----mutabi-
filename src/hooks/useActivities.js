@@ -119,7 +119,7 @@ export const INITIAL_PRESETS = [
     unit: 'time',
     dailyTarget: 100,
     activeDays: [],
-    icon: 'Sparkles',
+    icon: 'CircleDot',
     color: '#10b981',
     audience: 'all',
     assignedUids: [],
@@ -130,8 +130,14 @@ export const INITIAL_PRESETS = [
 
 export function useActivities(fetchAll = false) {
   const { user } = useAuth();
-  const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState(() => {
+    try {
+      const cached = localStorage.getItem('mutabi_activities_cache');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || `preset_${idx + 1}` }));
+  });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -151,9 +157,11 @@ export function useActivities(fetchAll = false) {
 
         if (items.length === 0) {
           // If Firestore activities collection is not yet seeded, provide the built-in presets
-          setActivities(INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || `preset_${idx + 1}` })));
+          const presets = INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || `preset_${idx + 1}` }));
+          setActivities(presets);
         } else if (fetchAll) {
           setActivities(items);
+          try { localStorage.setItem('mutabi_activities_cache', JSON.stringify(items)); } catch {}
         } else {
           // Filter strictly for current user
           const filtered = items.filter((a) => {
@@ -162,6 +170,7 @@ export function useActivities(fetchAll = false) {
             return a.assignedUids?.includes(user.uid);
           });
           setActivities(filtered);
+          try { localStorage.setItem('mutabi_activities_cache', JSON.stringify(filtered)); } catch {}
         }
         setLoading(false);
       },

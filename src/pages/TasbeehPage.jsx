@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useLogs } from '../hooks/useLogs.js';
 import { TasbeehCounter } from '../components/TasbeehCounter.jsx';
 import { getTodayDateString, formatArabicDate } from '../lib/dates.js';
-import { Sparkles, CheckCircle2, X } from 'lucide-react';
+import { Heart, CheckCircle2, X } from 'lucide-react';
 
 export function TasbeehPage() {
   const { userDoc } = useAuth();
@@ -61,7 +61,7 @@ export function TasbeehPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold mb-2">
-            <Sparkles className="w-3.5 h-3.5" />
+            <Heart className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>{formatArabicDate(todayStr, true)}</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">

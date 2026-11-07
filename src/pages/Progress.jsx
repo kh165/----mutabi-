@@ -6,6 +6,7 @@ import { useLogs } from '../hooks/useLogs.js';
 import { Heatmap } from '../components/Heatmap.jsx';
 import { ProgressRing } from '../components/ProgressRing.jsx';
 import { MonthlyWorshipCalendar } from '../components/MonthlyWorshipCalendar.jsx';
+import { WeeklyWorshipChart } from '../components/WeeklyWorshipChart.jsx';
 import { calculateStreaks, calculateKhatma, getWeeklyChartData } from '../lib/stats.js';
 import { evaluateBadges } from '../lib/badges.js';
 import { getTodayDateString } from '../lib/dates.js';
@@ -17,10 +18,9 @@ import {
   TrendingUp,
   Calendar,
   CheckCircle,
-  Star,
   Sprout,
   Target,
-  Sparkles,
+  CircleDot,
 } from 'lucide-react';
 import { TOTAL_PAGES } from '../data/quran.js';
 
@@ -40,7 +40,6 @@ export function Progress() {
     switch (iconName) {
       case 'Sprout': return Sprout;
       case 'Flame': return Flame;
-      case 'Star': return Star;
       case 'BookOpen': return BookOpen;
       case 'Brain': return Brain;
       case 'Target': return Target;
@@ -150,7 +149,7 @@ export function Progress() {
                 <span>الختمات السابقة: <strong>{khatma.completedKhatmas}</strong></span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
-                <Sparkles className="w-4 h-4 text-amber-500" />
+                <BookOpen className="w-4 h-4 text-sky-500" />
                 <span>الجزء الحالي: <strong>{Math.min(30, Math.ceil(khatma.currentPageInKhatma / 20) || 1)}</strong></span>
               </div>
             </div>
@@ -190,35 +189,8 @@ export function Progress() {
       {/* Monthly Worship Calendar in Progress Tab */}
       <MonthlyWorshipCalendar logs={logs} activities={activities} />
 
-      {/* Weekly Breakdown Chart (Last 7 Days) */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
-        <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-          <span>إنجاز الأيام السبعة الأخيرة</span>
-        </h3>
-        <div className="grid grid-cols-7 gap-2 sm:gap-3 pt-4 items-end h-44 border-b border-slate-100 dark:border-slate-800 pb-2">
-          {weeklyData.map((d) => {
-            const maxVal = Math.max(...weeklyData.map((w) => w.completedCount), 5);
-            const heightPercent = Math.min(100, Math.round((d.completedCount / maxVal) * 100));
-            return (
-              <div key={d.date} className="flex flex-col items-center gap-1.5 h-full justify-end">
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                  {d.completedCount}
-                </span>
-                <div className="w-full max-w-[36px] bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden flex flex-col justify-end h-28">
-                  <div
-                    className="w-full bg-emerald-600 dark:bg-emerald-500 rounded-xl transition-all duration-500"
-                    style={{ height: `${Math.max(8, heightPercent)}%` }}
-                  />
-                </div>
-                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  {d.dayLabel}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* Weekly Breakdown Chart (Recharts) */}
+      <WeeklyWorshipChart weeklyData={weeklyData} isDark={isDark} />
 
       {/* Badges & Achievements Gallery */}
       <div className="space-y-4">

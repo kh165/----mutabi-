@@ -15,10 +15,14 @@ import {
   ChevronDown,
   Sun,
   Moon,
+  CircleDot,
+  BookOpen,
 } from 'lucide-react';
 import { formatArabicDate, getTodayDateString } from '../../lib/dates.js';
 import { checkAndTriggerDueNotifications } from '../../lib/notifications.js';
+import { PWAInstallButton } from './PWAInstallButton.jsx';
 import { Logo } from './Logo.jsx';
+import { QuranReaderModal } from '../QuranReaderModal.jsx';
 
 export function Shell({
   currentTab,
@@ -32,6 +36,7 @@ export function Shell({
   const [notesOpen, setNotesOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [triggeredAlerts, setTriggeredAlerts] = useState({});
+  const [quranOpen, setQuranOpen] = useState(false);
 
   // Background Web Notification Checker (runs every 30 seconds)
   React.useEffect(() => {
@@ -56,7 +61,7 @@ export function Shell({
 
   const navItems = [
     { id: 'today', label: 'الورد اليومي', icon: CalendarDays },
-    { id: 'tasbeeh', label: 'التسبيح والأذكار', icon: Sparkles },
+    { id: 'tasbeeh', label: 'التسبيح والأذكار', icon: CircleDot },
     { id: 'progress', label: 'التقدم والأوسمة', icon: TrendingUp },
     { id: 'history', label: 'سجل الإنجازات', icon: History },
     { id: 'profile', label: 'الملف الشخصي', icon: User },
@@ -104,8 +109,21 @@ export function Shell({
             </div>
           </div>
 
-          {/* Right Tools: Theme Toggle, Notifications & User Avatar */}
+          {/* Right Tools: PWA Install, Theme Toggle, Notifications & User Avatar */}
           <div className="flex items-center gap-1.5 sm:gap-2.5">
+            {/* PWA Install Button */}
+            <PWAInstallButton />
+
+            {/* Quran Reader with Night Mode */}
+            <button
+              type="button"
+              onClick={() => setQuranOpen(true)}
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 flex items-center justify-center text-emerald-700 dark:text-emerald-300 transition-all border border-emerald-200 dark:border-emerald-800"
+              title="المصحف الشريف - القراءة والوضع الليلي المريح"
+            >
+              <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
+            </button>
+
             {/* Theme Toggle Button */}
             <button
               type="button"
@@ -317,6 +335,13 @@ export function Shell({
           );
         })}
       </nav>
+
+      {/* Quran Reader Modal */}
+      <QuranReaderModal
+        isOpen={quranOpen}
+        onClose={() => setQuranOpen(false)}
+        initialSurahNumber={1}
+      />
     </div>
   );
 }

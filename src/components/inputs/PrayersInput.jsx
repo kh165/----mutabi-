@@ -6,7 +6,7 @@ import {
   Sun,
   Sunset,
   Moon,
-  Sparkles,
+  SunMedium,
   Users,
   User,
   XCircle,
@@ -17,7 +17,7 @@ import {
 const DEFAULT_PRAYERS = [
   { id: 'fajr', title: 'صلاة الفجر', icon: Sunrise },
   { id: 'dhuhr', title: 'صلاة الظهر', icon: Sun },
-  { id: 'asr', title: 'صلاة العصر', icon: Sparkles },
+  { id: 'asr', title: 'صلاة العصر', icon: SunMedium },
   { id: 'maghrib', title: 'صلاة المغرب', icon: Sunset },
   { id: 'isha', title: 'صلاة العشاء', icon: Moon },
 ];
@@ -111,7 +111,7 @@ export function PrayersInput({
 
   const getPrayerIcon = (id) => {
     const found = DEFAULT_PRAYERS.find((d) => d.id === id);
-    return found?.icon || Sparkles;
+    return found?.icon || SunMedium;
   };
 
   return (

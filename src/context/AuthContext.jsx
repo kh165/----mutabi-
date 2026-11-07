@@ -7,6 +7,8 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut as fbSignOut,
+  setPersistence,
+  browserLocalPersistence,
 } from 'firebase/auth';
 import {
   doc,
@@ -24,17 +26,46 @@ const ROOT_ADMIN_EMAILS = [
   'khalidsalah9444@gmail.com',
 ];
 
+function getCachedAuth() {
+  try {
+    const raw = localStorage.getItem('mutabi_auth_user');
+    const rawDoc = localStorage.getItem('mutabi_auth_userdoc');
+    if (raw) {
+      return {
+        user: JSON.parse(raw),
+        userDoc: rawDoc ? JSON.parse(rawDoc) : null,
+      };
+    }
+  } catch {}
+  return { user: null, userDoc: null };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [userDoc, setUserDoc] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const cached = getCachedAuth();
+  const [user, setUser] = useState(cached.user);
+  const [userDoc, setUserDoc] = useState(cached.userDoc);
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return cached.user?.email && ROOT_ADMIN_EMAILS.includes(cached.user.email);
+  });
+  const [loading, setLoading] = useState(!cached.user);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // Explicitly enforce persistent auth state
+    setPersistence(auth, browserLocalPersistence).catch(() => {});
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        try {
+          localStorage.setItem('mutabi_auth_user', JSON.stringify({
+            uid: currentUser.uid,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+          }));
+        } catch {}
+
         try {
           const userRef = doc(db, 'users', currentUser.uid);
           const adminRef = doc(db, 'admins', currentUser.uid);
@@ -195,6 +226,10 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    try {
+      localStorage.removeItem('mutabi_auth_user');
+      localStorage.removeItem('mutabi_auth_userdoc');
+    } catch {}
     await fbSignOut(auth);
     setUser(null);
     setUserDoc(null);

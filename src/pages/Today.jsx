@@ -6,18 +6,27 @@ import { useLogs } from '../hooks/useLogs.js';
 import { useEncouragements } from '../hooks/useEncouragements.js';
 import { ActivityCard } from '../components/ActivityCard.jsx';
 import { ProgressRing } from '../components/ProgressRing.jsx';
-import { TasbeehCounter } from '../components/TasbeehCounter.jsx';
 import { MonthlyWorshipCalendar } from '../components/MonthlyWorshipCalendar.jsx';
+import { QuranReaderModal } from '../components/QuranReaderModal.jsx';
+import { AdhkarReaderModal } from '../components/AdhkarReaderModal.jsx';
 import { getTodayDateString, getPastDaysList, formatArabicDate } from '../lib/dates.js';
 import { calculateKhatma, getLatestMemorizedPosition } from '../lib/stats.js';
 import {
   Calendar,
-  Sparkles,
+  Heart,
+  CircleDot,
   Layers,
   X,
   CheckCircle2,
   CalendarDays,
   ListTodo,
+  BookOpen,
+  Moon,
+  SunMedium,
+  Video,
+  Clock,
+  ArrowUpRight,
+  Filter,
 } from 'lucide-react';
 
 export function Today({ onNavigateToTasbeeh }) {
@@ -30,12 +39,17 @@ export function Today({ onNavigateToTasbeeh }) {
   const todayStr = getTodayDateString(userDoc?.timezone);
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [activeMainView, setActiveMainView] = useState('daily'); // 'daily' | 'calendar'
+  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'prayers' | 'quran' | 'adhkar' | 'remaining'
   const [seeding, setSeeding] = useState(false);
 
-  // Celebratory encouragement popup state
+  // Quick Reader Modals from the Hero Launchpad
+  const [quranModalOpen, setQuranModalOpen] = useState(false);
+  const [adhkarModalOpen, setAdhkarModalOpen] = useState(false);
+  const [adhkarInitialCategory, setAdhkarInitialCategory] = useState('morning');
+
+  // Celebratory encouragement banner
   const [encouragementBanner, setEncouragementBanner] = useState(null);
 
-  // Auto-dismiss encouragement after 6 seconds
   useEffect(() => {
     if (!encouragementBanner) return;
     const timer = setTimeout(() => {
@@ -64,6 +78,24 @@ export function Today({ onNavigateToTasbeeh }) {
   const khatmaStats = calculateKhatma(logs, activities);
   const latestPosition = getLatestMemorizedPosition(logs);
 
+  // Dynamic time-of-day greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    const name = userDoc?.displayName ? `يا ${userDoc.displayName.split(' ')[0]}` : '';
+    if (hour >= 4 && hour < 12) {
+      return `صباح البركة والنور والنشاط ${name} 🌅`;
+    } else if (hour >= 12 && hour < 17) {
+      return `طاب يومك بذكر الله وطاعته ${name} ☀️`;
+    } else {
+      return `مساء السكينة وطمأنينة القلب ${name} 🌙`;
+    }
+  };
+
+  const handleAchievement = (activityTitle) => {
+    const phrase = getRandomPhrase();
+    setEncouragementBanner({ activityTitle, phrase });
+  };
+
   const handleSeed = async () => {
     setSeeding(true);
     try {
@@ -73,33 +105,6 @@ export function Today({ onNavigateToTasbeeh }) {
     }
   };
 
-  const handleAchievement = (activityTitle) => {
-    const phrase = getRandomPhrase();
-    setEncouragementBanner({ activityTitle, phrase });
-  };
-
-  // Handler for Tasbeeh counter to save in daily log
-  const handleSaveTasbeeh = async (count, dhikrTitle) => {
-    try {
-      // Find or match tasbeeh activity if exists
-      const tasbeehActivity = activities.find(
-        (a) => a.id === 'tasbeeh' || a.id.startsWith('tasbeeh_') || a.title.includes('تسبيح')
-      );
-      const actId = tasbeehActivity ? tasbeehActivity.id : 'tasbeeh';
-      const prevLog = logsMap.get(actId);
-      const newAmount = (prevLog?.amount || 0) + count;
-      await saveLog(actId, selectedDate, newAmount, true, {
-        dhikr: dhikrTitle,
-        lastAdded: count,
-        updatedAt: new Date().toISOString(),
-      }, dhikrTitle || 'تسبيح وأذكار');
-      handleAchievement(dhikrTitle || 'عداد التسبيح');
-    } catch (e) {
-      console.error('Error saving tasbeeh count', e);
-    }
-  };
-
-  // Handler for toggling fasting directly from calendar view
   const handleToggleFasting = async (dateStr, currentlyFasted) => {
     try {
       const fastingAct = activities.find(
@@ -117,7 +122,6 @@ export function Today({ onNavigateToTasbeeh }) {
     }
   };
 
-  // Handler for updating custom user target for an activity
   const handleUpdateTarget = async (activityId, newTarget) => {
     try {
       const currentTargets = userDoc?.customTargets || {};
@@ -129,15 +133,25 @@ export function Today({ onNavigateToTasbeeh }) {
     }
   };
 
+  // Filter activities based on the selected category tab
+  const filteredActivities = activities.filter((act) => {
+    const isDone = !!logsMap.get(act.id)?.completed;
+    if (categoryFilter === 'remaining') return !isDone;
+    if (categoryFilter === 'prayers') return act.type === 'prayers' || act.title.includes('صلاة') || act.title.includes('صلوات');
+    if (categoryFilter === 'quran') return act.type === 'read' || act.type === 'memorize' || act.title.includes('قرآن') || act.type === 'listen';
+    if (categoryFilter === 'adhkar') return act.title.includes('أذكار') || act.title.includes('تسبيح') || act.title.includes('صيام');
+    return true;
+  });
+
   return (
     <div className="space-y-6 text-right">
-      {/* Dynamic Celebration Encouragement Banner */}
+      {/* Encouragement Pop-up */}
       {encouragementBanner && (
         <div className="bg-white dark:bg-slate-900 border-2 border-emerald-500 shadow-xl rounded-3xl p-4 sm:p-5 text-right animate-in fade-in slide-in-from-top-4 duration-300 relative overflow-hidden">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3.5 flex-1 min-w-0">
               <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-xs">
-                <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400 animate-spin-slow" />
+                <Heart className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -154,7 +168,7 @@ export function Today({ onNavigateToTasbeeh }) {
             <button
               type="button"
               onClick={() => setEncouragementBanner(null)}
-              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center shrink-0"
+              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-500 flex items-center justify-center shrink-0"
               title="إغلاق"
             >
               <X className="w-4 h-4" />
@@ -163,25 +177,141 @@ export function Today({ onNavigateToTasbeeh }) {
         </div>
       )}
 
+      {/* Hero Spiritual Greeting & Progress Dashboard ("يخطف المستخدم أول ما يدخل") */}
+      <div className="bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-950 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-emerald-700/40">
+        {/* Subtle Islamic Geometric Ambient Accent */}
+        <div className="absolute top-0 end-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-10 -start-10 w-60 h-60 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="space-y-3 flex-1">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-emerald-200 text-xs font-bold">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{formatArabicDate(selectedDate, true)}</span>
+            </div>
+
+            <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+              {getGreeting()}
+            </h1>
+
+            <p className="text-emerald-100/90 text-xs sm:text-sm max-w-xl leading-relaxed font-medium">
+              «أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ» • استمر في المحافظة على وردك اليومي، واجعل كل خطوة لك اليوم بركة وقربة.
+            </p>
+
+            {/* Quick Launchpad Buttons (أركان العبادة السريعة) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
+              {/* Quran Reader */}
+              <button
+                type="button"
+                onClick={() => setQuranModalOpen(true)}
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+              >
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/30 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-4 h-4 text-emerald-300" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] font-bold text-white group-hover:text-emerald-200 truncate">
+                    المصحف الشريف
+                  </span>
+                  <span className="block text-[9px] text-emerald-200/70">تلاوة وراحة عين</span>
+                </div>
+              </button>
+
+              {/* Smart Tasbeeh */}
+              <button
+                type="button"
+                onClick={onNavigateToTasbeeh}
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+              >
+                <div className="w-8 h-8 rounded-xl bg-teal-500/30 flex items-center justify-center shrink-0">
+                  <CircleDot className="w-4 h-4 text-teal-300" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] font-bold text-white group-hover:text-teal-200 truncate">
+                    المسبحة الذكية
+                  </span>
+                  <span className="block text-[9px] text-teal-200/70">عداد وسجل الذكر</span>
+                </div>
+              </button>
+
+              {/* Morning/Evening Adhkar */}
+              <button
+                type="button"
+                onClick={() => {
+                  setAdhkarInitialCategory(new Date().getHours() < 13 ? 'morning' : 'evening');
+                  setAdhkarModalOpen(true);
+                }}
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+              >
+                <div className="w-8 h-8 rounded-xl bg-amber-500/30 flex items-center justify-center shrink-0">
+                  <SunMedium className="w-4 h-4 text-amber-300" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] font-bold text-white group-hover:text-amber-200 truncate">
+                    حصن المسلم
+                  </span>
+                  <span className="block text-[9px] text-amber-200/70">أذكار الصباح والمساء</span>
+                </div>
+              </button>
+
+              {/* Monthly Calendar */}
+              <button
+                type="button"
+                onClick={() => setActiveMainView(activeMainView === 'daily' ? 'calendar' : 'daily')}
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none"
+              >
+                <div className="w-8 h-8 rounded-xl bg-indigo-500/30 flex items-center justify-center shrink-0">
+                  <CalendarDays className="w-4 h-4 text-indigo-300" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[11px] font-bold text-white group-hover:text-indigo-200 truncate">
+                    تقويم العبادات
+                  </span>
+                  <span className="block text-[9px] text-indigo-200/70">الصلوات والصيام</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Daily Progress Ring in Hero */}
+          <div className="shrink-0 flex items-center justify-center bg-white/10 backdrop-blur-md p-5 rounded-3xl border border-white/15">
+            <ProgressRing
+              percentage={dayPercentage}
+              size={120}
+              strokeWidth={11}
+              color="#34d399"
+              backgroundColor="rgba(255, 255, 255, 0.15)"
+            >
+              <div className="flex flex-col items-center">
+                <span className="text-3xl font-black text-white">{dayPercentage}%</span>
+                <span className="text-[10px] text-emerald-200 font-bold">
+                  {completedCount}/{totalActivities} مكتمل
+                </span>
+              </div>
+            </ProgressRing>
+          </div>
+        </div>
+      </div>
+
       {/* Main View Switcher: الورد اليومي vs تقويم الصلوات والصيام */}
       <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1.5 rounded-2xl shadow-2xs">
         <div className="flex items-center gap-1.5 flex-1">
           <button
             type="button"
             onClick={() => setActiveMainView('daily')}
-            className={`flex-1 py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
               activeMainView === 'daily'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <ListTodo className="w-4 h-4" />
-            <span>الورد اليومي والتسبيح</span>
+            <span>الورد والأنشطة اليومية</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveMainView('calendar')}
-            className={`flex-1 py-2 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-2.5 px-3 sm:px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all ${
               activeMainView === 'calendar'
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -205,8 +335,8 @@ export function Today({ onNavigateToTasbeeh }) {
       ) : (
         /* Daily View Section */
         <>
-          {/* Date Navigator Bar */}
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-2.5 sm:p-3 shadow-sm">
+          {/* Past 7 Days Navigator Bar */}
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-2.5 sm:p-3 shadow-2xs">
             <div className="flex items-center justify-between gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0">
               {pastDays.map((d) => {
                 const isSelected = selectedDate === d.date;
@@ -244,105 +374,70 @@ export function Today({ onNavigateToTasbeeh }) {
             </div>
           </div>
 
-          {/* Daily Progress Overview Card */}
-          <div className="bg-white dark:bg-slate-900 border border-emerald-200/90 dark:border-slate-800 rounded-3xl p-5 sm:p-6 text-slate-900 dark:text-slate-100 shadow-sm relative overflow-hidden">
-            {/* Soft pastel ambient glow */}
-            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-50 dark:bg-emerald-950/20 rounded-full blur-3xl pointer-events-none -z-10" />
-
-            <div className="relative flex flex-col sm:flex-row items-center justify-between gap-5 sm:gap-6">
-              <div className="space-y-2 text-center sm:text-right">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold">
-                  <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>{formatArabicDate(selectedDate, true)}</span>
-                </div>
-
-                <h2 className="text-xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                  {allCompleted ? 'ما شاء الله! أنجزت كل أهدافك 🎉' : 'ورد اليوم وبركتُه 🌱'}
-                </h2>
-
-                <p className="text-slate-600 dark:text-slate-300 text-xs sm:text-sm max-w-md leading-relaxed">
-                  {allCompleted
-                    ? 'تقبل الله طاعتك وثبتك على هذا الخير العظيم، وجعله في موازين حسناتك.'
-                    : totalActivities > 0
-                    ? `أنجزت ${completedCount} من أصل ${totalActivities} أنشطة محددة لليوم.`
-                    : 'أهلاً بك في منصة مُتابِع. ابدأ بتسجيل أنشطتك واستمرارك اليومي.'}
-                </p>
-              </div>
-
-              <div className="shrink-0 bg-slate-50 dark:bg-slate-800/80 p-3.5 sm:p-4 rounded-3xl border border-slate-200/80 dark:border-slate-700 shadow-2xs">
-                <ProgressRing
-                  percentage={dayPercentage}
-                  size={105}
-                  strokeWidth={10}
-                  color="#10b981"
-                  backgroundColor={isDark ? "#334155" : "#e2e8f0"}
-                >
-                  <div className="flex flex-col items-center">
-                    <span className="text-2xl font-black text-slate-900 dark:text-white">{dayPercentage}%</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">
-                      {completedCount}/{totalActivities} تم
-                    </span>
-                  </div>
-                </ProgressRing>
-              </div>
+          {/* Activities Filter Tabs (تنظيم واضح ومفهوم) */}
+          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-2xl text-xs font-bold shrink-0">
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('all')}
+                className={`py-1.5 px-3 rounded-xl transition-all ${
+                  categoryFilter === 'all'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                الكل ({activities.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('prayers')}
+                className={`py-1.5 px-3 rounded-xl transition-all ${
+                  categoryFilter === 'prayers'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                الصلوات 🕌
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('quran')}
+                className={`py-1.5 px-3 rounded-xl transition-all ${
+                  categoryFilter === 'quran'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                القرآن والتدبر 📖
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('adhkar')}
+                className={`py-1.5 px-3 rounded-xl transition-all ${
+                  categoryFilter === 'adhkar'
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-400 shadow-2xs font-black'
+                    : 'text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                الأذكار والسنن 📿
+              </button>
+              <button
+                type="button"
+                onClick={() => setCategoryFilter('remaining')}
+                className={`py-1.5 px-3 rounded-xl transition-all ${
+                  categoryFilter === 'remaining'
+                    ? 'bg-amber-500 text-white shadow-2xs font-black'
+                    : 'text-amber-700 dark:text-amber-400'
+                }`}
+              >
+                المتبقي لليوم ({totalActivities - completedCount})
+              </button>
             </div>
-          </div>
-
-          {/* Dedicated Tasbeeh & Adhkar Banner Launcher */}
-          <div
-            onClick={onNavigateToTasbeeh}
-            className="p-4 sm:p-5 bg-gradient-to-l from-emerald-600 via-teal-700 to-emerald-800 text-white rounded-3xl shadow-md cursor-pointer hover:shadow-lg transition-all flex items-center justify-between gap-4 select-none"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center text-2xl shrink-0 shadow-inner">
-                📿
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-black text-sm sm:text-base">
-                    مسبحة الأذكار وحصن المسلم
-                  </h3>
-                  <span className="text-[10px] bg-white/20 text-white font-bold px-2 py-0.5 rounded-full">
-                    قسم مستقل
-                  </span>
-                </div>
-                <p className="text-xs text-emerald-100 mt-0.5 leading-relaxed">
-                  أذكار الصباح والمساء كاملة مع التكرار والفضائل، وعداد تسبيح رقمي مع كامل الأذكار المسنونة.
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="px-4 py-2 bg-white text-emerald-800 hover:bg-emerald-50 text-xs font-black rounded-xl shadow-xs whitespace-nowrap shrink-0 transition-all"
-            >
-              افتح المسبحة والأذكار ↗
-            </button>
           </div>
 
           {/* Activities Grid */}
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span>أنشطة الورد اليومي</span>
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-full shadow-2xs">
-                  {totalActivities}
-                </span>
-              </h3>
-              <span className="text-xs text-slate-400 hidden sm:inline">
-                اضغط على أي كارت للتسجيل المفصل
-              </span>
-            </div>
-
-            {loadingActivities || loadingLogs ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-24 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : activities.length === 0 ? (
+            {activities.length === 0 ? (
               <div className="p-8 sm:p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl space-y-3 shadow-sm">
                 <Layers className="w-10 h-10 text-slate-400 mx-auto" />
                 <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
@@ -360,14 +455,18 @@ export function Today({ onNavigateToTasbeeh }) {
                     onClick={handleSeed}
                     className="mt-2 py-2.5 px-5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center gap-1.5"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <CheckCircle2 className="w-4 h-4" />
                     <span>{seeding ? 'جارٍ التهيئة...' : 'تهيئة باقة الأنشطة المقترحة'}</span>
                   </button>
                 )}
               </div>
+            ) : filteredActivities.length === 0 ? (
+              <div className="p-8 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl text-xs text-slate-500">
+                لا توجد عبادات تطابق هذا التبويب المحدد حالياً.
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
-                {activities.map((activity) => (
+                {filteredActivities.map((activity) => (
                   <ActivityCard
                     key={activity.id}
                     activity={activity}
@@ -387,6 +486,34 @@ export function Today({ onNavigateToTasbeeh }) {
           </div>
         </>
       )}
+
+      {/* Hero-accessible Quran Reader Modal */}
+      <QuranReaderModal
+        isOpen={quranModalOpen}
+        onClose={() => setQuranModalOpen(false)}
+        initialSurahNumber={1}
+        onLogPagesRead={async (surah) => {
+          const readAct = activities.find((a) => a.type === 'read' || a.title.includes('تلاوة'));
+          if (readAct) {
+            await saveLog(readAct.id, selectedDate, 2, true, { surah: surah.name, page: surah.startPage }, `قراءة سورة ${surah.name}`);
+            handleAchievement(`تلاوة سورة ${surah.name}`);
+          }
+        }}
+      />
+
+      {/* Hero-accessible Adhkar Reader Modal */}
+      <AdhkarReaderModal
+        isOpen={adhkarModalOpen}
+        onClose={() => setAdhkarModalOpen(false)}
+        initialCategory={adhkarInitialCategory}
+        onCompleteCategory={async (title) => {
+          const adhkarAct = activities.find((a) => a.title.includes('أذكار'));
+          if (adhkarAct) {
+            await saveLog(adhkarAct.id, selectedDate, 1, true, { category: title }, title);
+            handleAchievement(title);
+          }
+        }}
+      />
     </div>
   );
 }

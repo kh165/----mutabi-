@@ -60,9 +60,9 @@ export function evaluateBadges(
     },
     {
       id: 'streak_30',
-      title: 'ثبات شهر 🌟',
+      title: 'ثبات شهر 🏆',
       description: 'الاستمرار لمدة 30 يومًا متواصلاً',
-      icon: 'Star',
+      icon: 'Award',
       unlocked: longestStreak >= 30,
       progressPercent: Math.min(100, Math.round((Math.max(currentStreak, longestStreak) / 30) * 100)),
     },

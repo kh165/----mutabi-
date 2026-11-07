@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import {
   RotateCcw,
-  Sparkles,
+  Heart,
   Volume2,
   VolumeX,
   Check,
@@ -265,8 +265,8 @@ export function TasbeehCounter({ todayStr, onSaveCount, initialCount = 0 }) {
               }`}
               title={soundEnabled ? 'كتم الصوت' : 'تفعيل صوت النقر'}
             >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              <span className="hidden sm:inline">{soundEnabled ? 'الصوت مفعّل' : 'مكتوم'}</span>
+              {soundEnabled ? <Volume2 className="w-4 h-4 shrink-0" /> : <VolumeX className="w-4 h-4 shrink-0" />}
+              <span className="text-[11px]">{soundEnabled ? 'صوت' : 'صامت'}</span>
             </button>
 
             {/* Direct Lap Reset Button (Works 100% reliably) */}

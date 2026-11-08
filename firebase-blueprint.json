@@ -125,12 +125,39 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["text"]
+    },
+    "Todo": {
+      "title": "Todo",
+      "description": "Personal To-Do list item for an individual user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+        "category": { "type": "string", "maxLength": 50 },
+        "dueDate": { "type": "string" },
+        "dueTime": { "type": "string" },
+        "isStarred": { "type": "boolean" },
+        "completed": { "type": "boolean" },
+        "subtasks": { "type": "array" },
+        "tags": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "completedAt": { "type": "string" }
+      },
+      "required": ["title", "completed", "uid"]
     }
   },
   "firestore": {
     "/users/{uid}": {
       "schema": "User",
       "description": "Stores user profiles with isolation and admin oversight"
+    },
+    "/users/{uid}/todos/{todoId}": {
+      "schema": "Todo",
+      "description": "Personal To-Do list items belonging to individual users"
     },
     "/admins/{uid}": {
       "schema": "Admin",

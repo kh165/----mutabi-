@@ -19,6 +19,7 @@ import {
   CircleDot,
   BookOpen,
   Award,
+  CheckSquare,
 } from 'lucide-react';
 import { formatArabicDate, getTodayDateString } from '../../lib/dates.js';
 import { Logo } from './Logo.jsx';
@@ -50,6 +51,7 @@ export function Shell({
 
   const navItems = [
     { id: 'today', label: 'الورد اليومي', icon: CalendarDays },
+    { id: 'todos', label: 'قائمة المهام', icon: CheckSquare },
     { id: 'tasbeeh', label: 'التسبيح والأذكار', icon: CircleDot },
     { id: 'hadith', label: 'الأربعين النووية', icon: BookOpen },
     { id: 'progress', label: 'التقدم والأوسمة', icon: TrendingUp },
@@ -342,7 +344,7 @@ export function Shell({
       </footer>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 z-40 px-1.5 py-1.5 flex items-center justify-around shadow-lg">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 z-40 px-2 py-1.5 flex items-center justify-between overflow-x-auto scrollbar-none shadow-lg gap-0.5">
         {navItems.map((item) => {
           const active = currentTab === item.id || (item.id === 'admin' && currentTab.startsWith('admin'));
           const Icon = item.icon;
@@ -350,14 +352,14 @@ export function Shell({
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center gap-1 py-1 px-3 rounded-2xl transition-all cursor-pointer ${
+              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-2xl transition-all cursor-pointer shrink-0 ${
                 active
                   ? 'text-emerald-700 dark:text-emerald-400 font-bold scale-105'
                   : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-xs font-medium'
               }`}
             >
               <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-[10px] sm:text-[11px]">{item.label}</span>
+              <span className="text-[10px] sm:text-[11px] whitespace-nowrap">{item.label}</span>
             </button>
           );
         })}

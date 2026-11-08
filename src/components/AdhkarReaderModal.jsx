@@ -20,6 +20,7 @@ import {
 import { ADHKAR_CATEGORIES } from '../data/adhkar.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getTodayDateString } from '../lib/dates.js';
+import { enqueueOfflineAction } from '../lib/offlineSync.js';
 import {
   collection,
   db,
@@ -214,6 +215,21 @@ export function AdhkarReaderModal({
   const persistCount = (dhikrId, categoryId, count, errorMessage) => {
     if (!user?.uid || !dayKey || !categoryId) return;
     setProgressSyncError(null);
+
+    if (!navigator.onLine) {
+      enqueueOfflineAction({
+        type: 'SAVE_ADHKAR',
+        key: `ADHKAR_${dayKey}_${categoryId}_${dhikrId}`,
+        uid: user.uid,
+        dayKey,
+        categoryId,
+        dhikrId,
+        count,
+      });
+      setProgressSyncState('offline');
+      return;
+    }
+
     void setDoc(
       doc(
         db,
@@ -234,9 +250,22 @@ export function AdhkarReaderModal({
     ).then(
       () => setProgressSyncState('synced'),
       (error) => {
-        console.error('Failed to save adhkar progress:', error);
-        setProgressSyncState('error');
-        setProgressSyncError(errorMessage);
+        if (!navigator.onLine || error?.message?.includes('offline') || error?.code === 'unavailable') {
+          enqueueOfflineAction({
+            type: 'SAVE_ADHKAR',
+            key: `ADHKAR_${dayKey}_${categoryId}_${dhikrId}`,
+            uid: user.uid,
+            dayKey,
+            categoryId,
+            dhikrId,
+            count,
+          });
+          setProgressSyncState('offline');
+        } else {
+          console.error('Failed to save adhkar progress:', error);
+          setProgressSyncState('error');
+          setProgressSyncError(errorMessage);
+        }
       }
     );
   };

@@ -140,11 +140,21 @@ export function AuthProvider({ children }) {
         console.warn('Initial profile fetch warning:', err);
         if (!stillCurrent()) return;
         const isOfflineError =
+          !navigator.onLine ||
           err?.code === 'unavailable' ||
           err?.code === 'deadline-exceeded' ||
-          err?.message?.includes('client is offline');
+          err?.message?.includes('client is offline') ||
+          err?.message?.includes('offline') ||
+          err?.message?.includes('Failed to fetch') ||
+          err?.message?.includes('network-request-failed');
         if (!isOfflineError) setProfileSyncError(err);
-        setUserDoc((prev) => prev || {
+        let cachedDoc = null;
+        try {
+          const raw = localStorage.getItem('mutabi_auth_userdoc');
+          if (raw) cachedDoc = JSON.parse(raw);
+        } catch {}
+
+        setUserDoc((prev) => prev || cachedDoc || {
           displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'مستخدم',
           email: currentUser.email || '',
           photoURL: currentUser.photoURL || null,
@@ -186,8 +196,14 @@ export function AuthProvider({ children }) {
             }));
           } catch {}
 
-          // الواجهة تفتح فورًا، وبيانات الملف تتحمّل في الخلفية
-          setUserDoc((prev) => prev || {
+          let initialCached = null;
+          try {
+            const raw = localStorage.getItem('mutabi_auth_userdoc');
+            if (raw) initialCached = JSON.parse(raw);
+          } catch {}
+
+          // الواجهة تفتح فورًا بدون انتظار الشبكة
+          setUserDoc((prev) => prev || initialCached || {
             displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'مستخدم',
             email: currentUser.email || '',
             photoURL: currentUser.photoURL || null,

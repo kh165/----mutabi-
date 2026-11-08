@@ -18,6 +18,7 @@ import { isDatabasePermissionError } from './firebase.js';
 import { Lock } from 'lucide-react';
 import { TasbeehPage } from './pages/TasbeehPage.jsx';
 import { HadithPage } from './pages/HadithPage.jsx';
+import { TodosPage } from './pages/TodosPage.jsx';
 import { PrayerAlertBanner } from './components/PrayerAlertBanner.jsx';
 import { AdminErrorBoundary } from './components/AdminErrorBoundary.jsx';
 import { AdminFollowConsentDialog } from './components/AdminFollowConsentDialog.jsx';
@@ -30,7 +31,7 @@ import { applyPrayerTimes, fetchPrayerTimes, getLocalDateKey } from './lib/praye
 
 function getInitialTab() {
   const hash = window.location.hash.replace('#', '').trim();
-  const validTabs = ['today', 'tasbeeh', 'hadith', 'progress', 'history', 'profile', 'admin'];
+  const validTabs = ['today', 'tasbeeh', 'hadith', 'todos', 'progress', 'history', 'profile', 'admin'];
   if (hash && validTabs.includes(hash)) return hash;
   try {
     const saved = localStorage.getItem('mutabi_active_tab');
@@ -106,7 +107,7 @@ function MainApp() {
   React.useEffect(() => {
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '').trim();
-      const validTabs = ['today', 'tasbeeh', 'progress', 'history', 'profile', 'admin'];
+      const validTabs = ['today', 'tasbeeh', 'hadith', 'todos', 'progress', 'history', 'profile', 'admin'];
       if (hash && validTabs.includes(hash)) {
         setCurrentTabState(hash);
       }
@@ -296,13 +297,32 @@ function MainApp() {
         currentStreak={currentStreak}
         totalPoints={userPoints.totalPoints}
       >
-        {currentTab === 'today' && <Today onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')} onNavigateToHadith={() => handleSelectTab('hadith')} />}
+        {currentTab === 'today' && (
+          <Today
+            onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')}
+            onNavigateToHadith={() => handleSelectTab('hadith')}
+            onNavigateToTodos={() => handleSelectTab('todos')}
+          />
+        )}
         {currentTab === 'tasbeeh' && <TasbeehPage />}
         {currentTab === 'hadith' && <HadithPage />}
+        {currentTab === 'todos' && <TodosPage />}
         {currentTab === 'progress' && <Progress />}
         {currentTab === 'history' && <History />}
         {currentTab === 'profile' && <Profile />}
-        {currentTab === 'admin' && (isAdmin ? <AdminErrorBoundary><AdminDashboard /></AdminErrorBoundary> : <Today onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')} onNavigateToHadith={() => handleSelectTab('hadith')} />)}
+        {currentTab === 'admin' && (
+          isAdmin ? (
+            <AdminErrorBoundary>
+              <AdminDashboard />
+            </AdminErrorBoundary>
+          ) : (
+            <Today
+              onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')}
+              onNavigateToHadith={() => handleSelectTab('hadith')}
+              onNavigateToTodos={() => handleSelectTab('todos')}
+            />
+          )
+        )}
       </Shell>
       {userDoc && typeof userDoc.adminMonitoringConsent !== 'boolean' && (
         <AdminFollowConsentDialog

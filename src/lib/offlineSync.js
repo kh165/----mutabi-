@@ -137,6 +137,51 @@ export async function syncPendingOfflineData() {
           { merge: true }
         );
         successCount++;
+      } else if (action.type === 'SAVE_TODO') {
+        const { uid, todoId, data, todosList } = action;
+        if (todoId && data) {
+          const todoRef = doc(db, 'users', uid, 'todos', todoId);
+          await setDoc(todoRef, data, { merge: true }).catch((e) => console.warn('Subcollection todo sync note:', e));
+        }
+        if (Array.isArray(todosList)) {
+          const userRef = doc(db, 'users', uid);
+          await setDoc(userRef, { todosList: todosList.slice(0, 100), lastTodosSyncAt: new Date().toISOString() }, { merge: true });
+        }
+        successCount++;
+      } else if (action.type === 'DELETE_TODO') {
+        const { uid, todoId, todosList } = action;
+        if (todoId) {
+          const todoRef = doc(db, 'users', uid, 'todos', todoId);
+          await deleteDoc(todoRef).catch(() => {});
+        }
+        if (Array.isArray(todosList)) {
+          const userRef = doc(db, 'users', uid);
+          await setDoc(userRef, { todosList: todosList.slice(0, 100), lastTodosSyncAt: new Date().toISOString() }, { merge: true });
+        }
+        successCount++;
+      } else if (action.type === 'SYNC_TODOS') {
+        const { uid, todosList } = action;
+        if (Array.isArray(todosList)) {
+          const userRef = doc(db, 'users', uid);
+          await setDoc(userRef, { todosList: todosList.slice(0, 100), lastTodosSyncAt: new Date().toISOString() }, { merge: true });
+        }
+        successCount++;
+      } else if (action.type === 'SAVE_ADHKAR') {
+        const { uid, dayKey, categoryId, dhikrId, count } = action;
+        const ref = doc(db, 'users', uid, 'adhkarProgress', `${dayKey}_${categoryId}_${dhikrId}`);
+        await setDoc(
+          ref,
+          {
+            uid,
+            date: dayKey,
+            categoryId,
+            dhikrId,
+            count,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+        successCount++;
       }
     } catch (err) {
       console.warn('Sync failed for item:', action.key, err);
@@ -165,6 +210,14 @@ export async function syncPendingOfflineData() {
   );
 
   return { synced: successCount, pending: remaining.length };
+}
+
+// Automatically trigger sync when the device reconnects to internet
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.info('Reconnected to internet. Initiating automatic Firestore background sync...');
+    syncPendingOfflineData().catch((err) => console.warn('Auto-sync error:', err));
+  });
 }
 
 /**

@@ -11,6 +11,7 @@ import { AuthPage } from './pages/auth/AuthPage.jsx';
 import { useActivities } from './hooks/useActivities.js';
 import { useLogs } from './hooks/useLogs.js';
 import { calculateStreaks } from './lib/stats.js';
+import { calculateUserPoints } from './lib/points.js';
 import { getTodayDateString } from './lib/dates.js';
 import { Logo } from './components/layout/Logo.jsx';
 import { isDatabasePermissionError } from './firebase.js';
@@ -142,7 +143,9 @@ function MainApp() {
   }, [user, userDoc?.notifications]);
 
   const todayStr = getTodayDateString(userDoc?.timezone);
-  const { currentStreak } = calculateStreaks(logs, todayStr);
+  const streaks = calculateStreaks(logs, todayStr);
+  const currentStreak = streaks.currentStreak;
+  const userPoints = calculateUserPoints(logs, activities, streaks);
 
   const handleRecordPrayerFromAlert = async (prayerKey) => {
     try {
@@ -290,6 +293,7 @@ function MainApp() {
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
         currentStreak={currentStreak}
+        totalPoints={userPoints.totalPoints}
       >
         {currentTab === 'today' && <Today onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')} />}
         {currentTab === 'tasbeeh' && <TasbeehPage />}

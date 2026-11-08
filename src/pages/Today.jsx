@@ -8,6 +8,7 @@ import { ActivityCard } from '../components/ActivityCard.jsx';
 import { PrayersTrackerCard } from '../components/PrayersTrackerCard.jsx';
 import { ProgressRing } from '../components/ProgressRing.jsx';
 import { MonthlyWorshipCalendar } from '../components/MonthlyWorshipCalendar.jsx';
+import { PrayerTimesBar } from '../components/PrayerTimesBar.jsx';
 import { QuranReaderModal } from '../components/QuranReaderModal.jsx';
 import { AdhkarReaderModal } from '../components/AdhkarReaderModal.jsx';
 import { getTodayDateString, getPastDaysList, formatArabicDate } from '../lib/dates.js';
@@ -235,7 +236,7 @@ export function Today({ onNavigateToTasbeeh }) {
             </p>
 
             {/* Quick Launchpad Buttons */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2">
               {/* Quran Reader */}
               <button
                 type="button"
@@ -328,6 +329,9 @@ export function Today({ onNavigateToTasbeeh }) {
           </div>
         </div>
       </div>
+
+      {/* Live Geolocation Prayer Times Bar & Phone Notifications */}
+      <PrayerTimesBar userDoc={userDoc} updateUserDoc={updateUserDoc} />
 
       {/* Main View Switcher: الورد اليومي vs تقويم الصلوات والصيام */}
       <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1.5 rounded-2xl shadow-2xs">

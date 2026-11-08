@@ -18,6 +18,7 @@ import {
   Moon,
   CircleDot,
   BookOpen,
+  Award,
 } from 'lucide-react';
 import { formatArabicDate, getTodayDateString } from '../../lib/dates.js';
 import { Logo } from './Logo.jsx';
@@ -28,6 +29,7 @@ export function Shell({
   currentTab,
   onSelectTab,
   currentStreak = 0,
+  totalPoints = 0,
   children,
 }) {
   const { user, userDoc, isAdmin, logout } = useAuth();
@@ -75,10 +77,10 @@ export function Shell({
             </div>
           </div>
 
-          {/* Center: Streak Badge */}
-          <div className="flex items-center gap-2">
+          {/* Center: Streak Badge & Points Badge */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <div
-              className={`flex items-center gap-1.5 px-3 py-1 sm:py-1.5 rounded-2xl font-bold text-xs sm:text-sm border transition-all ${
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-2xl font-bold text-xs sm:text-sm border transition-all ${
                 currentStreak > 0
                   ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 shadow-2xs'
                   : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
@@ -88,6 +90,16 @@ export function Shell({
               <Flame className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${currentStreak > 0 ? 'fill-amber-500 text-amber-500' : 'text-slate-400'}`} />
               <span>{currentStreak} {currentStreak === 1 ? 'يوم' : 'أيام'}</span>
             </div>
+
+            <button
+              type="button"
+              onClick={() => onSelectTab('progress')}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-2xl font-bold text-xs sm:text-sm border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 shadow-2xs cursor-pointer hover:scale-105 transition-all"
+              title="رصيد نقاط العبادة - اضغط للانتقال إلى واجهة الميداليات"
+            >
+              <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{totalPoints} <span className="text-[10px] sm:text-xs font-semibold">نقطة</span></span>
+            </button>
           </div>
 
           {/* Right Tools: PWA Install, Theme Toggle, Notifications & User Avatar */}
@@ -319,7 +331,7 @@ export function Shell({
       </div>
 
       <footer dir="ltr" className="w-full px-4 pb-24 pt-2 text-center text-xs text-slate-400 dark:text-slate-500 md:pb-5">
-        Khalid Salah — All rights reserved | 2026 ©
+        khalid salah — All rights reserved | 2026 ©
       </footer>
 
       {/* Mobile Bottom Navigation Bar */}

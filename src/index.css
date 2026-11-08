@@ -26,8 +26,25 @@
 }
 
 .quran-text {
-  font-family: 'Amiri Quran', serif;
+  font-family: 'Amiri Quran', 'Amiri', serif;
 }
+
+.font-quran-hafs {
+  font-family: 'Amiri Quran', 'Amiri', serif;
+}
+
+.font-quran-scheherazade {
+  font-family: 'Scheherazade New', 'Amiri', serif;
+}
+
+.font-quran-naskh {
+  font-family: 'Noto Naskh Arabic', serif;
+}
+
+.font-quran-amiri {
+  font-family: 'Amiri', serif;
+}
+
 
 .quran-mushaf-page::before {
   position: absolute;

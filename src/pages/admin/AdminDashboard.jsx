@@ -10,7 +10,7 @@ import { getTodayDateString, formatArabicDate } from '../../lib/dates.js';
 import { calculateStreaks, calculateKhatma } from '../../lib/stats.js';
 import { evaluateBadges } from '../../lib/badges.js';
 import { getSurah, TOTAL_PAGES } from '../../data/quran.js';
-import { MORNING_ADHKAR, EVENING_ADHKAR } from '../../data/adhkar.js';
+import { ADHKAR_CATEGORIES } from '../../data/adhkar.js';
 import {
   collection,
   query,
@@ -477,13 +477,10 @@ export function AdminDashboard() {
   const completionPercentage = totalAssignedActivities.length > 0
     ? Math.round((completedActivitiesCount / totalAssignedActivities.length) * 100)
     : 0;
-  const adhkarProgressStats = [
-    { key: 'morning', title: 'أذكار الصباح', items: MORNING_ADHKAR },
-    { key: 'evening', title: 'أذكار المساء', items: EVENING_ADHKAR },
-  ].map(({ key, title, items }) => {
-    const saved = userAdhkarProgress[key] || {};
+  const adhkarProgressStats = ADHKAR_CATEGORIES.map(({ id, title, items }) => {
+    const saved = userAdhkarProgress[id] || {};
     return {
-      key,
+      key: id,
       title,
       completed: items.filter((item) => Number(saved[item.id]?.count) >= item.count).length,
       total: items.length,

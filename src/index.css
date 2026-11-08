@@ -39,6 +39,152 @@
   pointer-events: none;
 }
 
+.quran-mushaf-page {
+  position: relative;
+  border: 2px solid #c6a76c;
+  border-radius: 0.7rem;
+  background:
+    radial-gradient(ellipse at top, rgba(255, 255, 255, 0.68), transparent 58%),
+    #fffaf0;
+  box-shadow: 0 16px 48px rgba(70, 50, 20, 0.15);
+}
+
+.quran-page-ornament {
+  position: absolute;
+  inset: 16px;
+  border: 1px solid rgba(152, 119, 62, 0.28);
+  border-radius: 0.45rem;
+  pointer-events: none;
+}
+
+.quran-page-text {
+  position: relative;
+  color: #3e3426;
+  font-size: calc(1.45rem * var(--quran-font-scale, 1));
+  line-height: 2.45;
+  text-align: justify;
+  text-align-last: center;
+}
+
+.quran-surah-heading {
+  display: block;
+  margin: 0.25rem auto 1.1rem;
+  max-width: 32rem;
+  border-block: 1px solid rgba(152, 119, 62, 0.35);
+  padding: 0.2rem 0.5rem;
+  color: #554323;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.quran-surah-heading > span:not(.quran-bismillah) {
+  padding-inline: 0.45rem;
+  color: #9c7d43;
+}
+
+.quran-bismillah {
+  display: block;
+  padding-top: 0.35rem;
+  font-family: 'Amiri Quran', serif;
+  font-size: 1.2em;
+}
+
+.quran-ayah {
+  display: inline;
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0.3rem;
+  color: inherit;
+  font-family: 'Amiri Quran', serif;
+  text-align: inherit;
+  vertical-align: baseline;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.quran-ayah:hover,
+.quran-ayah:focus-visible {
+  background: rgba(178, 149, 91, 0.12);
+  outline: none;
+}
+
+.quran-ayah-bookmarked {
+  background: rgba(202, 168, 97, 0.18);
+  box-shadow: inset 0 -2px 0 rgba(132, 99, 38, 0.38);
+}
+
+.quran-ayah-focused {
+  background: rgba(16, 185, 129, 0.15);
+  box-shadow: inset 0 -2px 0 rgba(5, 120, 87, 0.65);
+}
+
+.quran-ayah-marker {
+  display: inline-flex;
+  width: 1.5em;
+  height: 1.5em;
+  align-items: center;
+  justify-content: center;
+  margin-inline: 0.15em;
+  border: 1px solid #9a7a43;
+  border-radius: 50%;
+  color: #5b492d;
+  font-family: 'Amiri Quran', serif;
+  font-size: 0.55em;
+  line-height: 1;
+  vertical-align: 0.18em;
+}
+
+.quran-ayah-bookmark-icon {
+  display: inline;
+  width: 0.7em;
+  height: 0.7em;
+  color: #987437;
+  vertical-align: middle;
+}
+
+.tajweed-ham_wasl,
+.tajweed-laam_shamsiyah,
+.tajweed-slnt {
+  color: #9b653d;
+}
+
+.tajweed-madda_normal,
+.tajweed-madda_permissible,
+.tajweed-madda_necessary,
+.tajweed-madda_obligatory {
+  color: #527b53;
+}
+
+.tajweed-ghunnah,
+.tajweed-idgham_ghunnah,
+.tajweed-idgham_wo_ghunnah {
+  color: #a64e44;
+}
+
+.tajweed-ikhafa,
+.tajweed-iqlab,
+.tajweed-qalaqah {
+  color: #4e8060;
+}
+
+@media (max-width: 640px) {
+  .quran-page-text {
+    font-size: calc(1.2rem * var(--quran-font-scale, 1));
+    line-height: 2.35;
+  }
+
+  .quran-mushaf-page {
+    min-height: 68dvh;
+    padding: 1.7rem 1.25rem;
+  }
+
+  .quran-page-ornament {
+    inset: 10px;
+  }
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;

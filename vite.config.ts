@@ -11,6 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: false,
         includeAssets: [
           'favicon.ico',
           'favicon-16x16.png',
@@ -54,6 +55,8 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          skipWaiting: true,
+          clientsClaim: true,
           importScripts: ['/notification-handler.js'],
           maximumFileSizeToCacheInBytes: 30 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json,txt}'],

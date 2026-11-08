@@ -241,3 +241,66 @@ export async function getSurahAyahs(surahNumber) {
 
   throw new Error('تعذر تحميل نص السورة كاملًا من مصادر القرآن. تحقق من اتصال الإنترنت وحاول مرة أخرى.');
 }
+
+const isValidMushafPage = (page) =>
+  Number.isInteger(page?.pageNumber) &&
+  page.pageNumber >= 1 &&
+  page.pageNumber <= 604 &&
+  Array.isArray(page.verses) &&
+  page.verses.length > 0 &&
+  page.verses.every(
+    (verse) =>
+      /^\d{1,3}:\d{1,3}$/.test(verse.verseKey) &&
+      typeof verse.text === 'string' &&
+      verse.text.trim()
+  );
+
+export async function getMushafPage(pageNumber) {
+  const page = Number(pageNumber);
+  if (!Number.isInteger(page) || page < 1 || page > 604) {
+    throw new Error('رقم صفحة المصحف يجب أن يكون بين 1 و604.');
+  }
+
+  const cacheKey = `quran_mushaf_tajweed_page_${page}`;
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      const savedPage = JSON.parse(cached);
+      if (isValidMushafPage(savedPage) && savedPage.pageNumber === page) {
+        return savedPage;
+      }
+      localStorage.removeItem(cacheKey);
+    }
+  } catch (error) {
+    console.warn('Could not read the cached Quran page:', error);
+  }
+
+  const response = await fetch(
+    `https://api.quran.com/api/v4/quran/verses/uthmani_tajweed?page_number=${page}`
+  );
+  if (!response.ok) {
+    throw new Error(`تعذر تحميل صفحة المصحف ${page} (HTTP ${response.status}).`);
+  }
+
+  const data = await response.json();
+  const result = {
+    pageNumber: page,
+    verses: Array.isArray(data?.verses)
+      ? data.verses.map((verse) => ({
+          verseKey: verse.verse_key,
+          text: verse.text_uthmani_tajweed,
+        }))
+      : [],
+  };
+  if (!isValidMushafPage(result)) {
+    throw new Error(`استجابة صفحة المصحف ${page} غير مكتملة أو غير صالحة.`);
+  }
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(result));
+  } catch (error) {
+    console.warn('Could not cache the Quran page locally:', error);
+  }
+
+  return result;
+}

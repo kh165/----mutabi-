@@ -1,16 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MORNING_ADHKAR, EVENING_ADHKAR } from '../data/adhkar.js';
+import { Check, CheckCircle2, Moon, RotateCcw, SunMedium, X } from 'lucide-react';
+import { ADHKAR_CATEGORIES } from '../data/adhkar.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { db, doc, getDoc, serverTimestamp, setDoc } from '../firebase.js';
 import { useReaderHistory } from '../hooks/useReaderHistory.js';
-import {
-  SunMedium,
-  Moon,
-  CheckCircle2,
-  RotateCcw,
-  X,
-  Eye,
-} from 'lucide-react';
+
+const emptyProgress = () =>
+  Object.fromEntries(ADHKAR_CATEGORIES.map((category) => [category.id, {}]));
 
 export function AdhkarReaderModal({
   isOpen,
@@ -21,44 +17,52 @@ export function AdhkarReaderModal({
 }) {
   const { user } = useAuth();
   const closeReader = useReaderHistory(isOpen, onClose, 'adhkar');
-  const [category, setCategory] = useState(initialCategory); // 'morning' | 'evening'
-  const [adhkarState, setAdhkarState] = useState({ morning: {}, evening: {} });
+  const [categoryId, setCategoryId] = useState(initialCategory);
+  const [adhkarState, setAdhkarState] = useState(emptyProgress);
   const [loadingProgress, setLoadingProgress] = useState(false);
   const [progressError, setProgressError] = useState(null);
   const saveQueueRef = useRef(Promise.resolve());
 
-  // Reading Comfort Mode: 'normal' | 'night' (Warm dark sepia for eye protection) | 'sepia' (Cream)
-  const [readerTheme, setReaderTheme] = useState('night');
-  // Font Size: 'sm' (15px) | 'md' (18px) | 'lg' (22px) | 'xl' (26px)
-  const [fontSize, setFontSize] = useState('lg');
+  const activeCategory =
+    ADHKAR_CATEGORIES.find((category) => category.id === categoryId) ||
+    ADHKAR_CATEGORIES[0];
+  const currentList = activeCategory.items;
 
   useEffect(() => {
-    if (isOpen) setCategory(initialCategory);
+    if (isOpen) {
+      setCategoryId(
+        ADHKAR_CATEGORIES.some((category) => category.id === initialCategory)
+          ? initialCategory
+          : 'morning'
+      );
+    }
   }, [isOpen, initialCategory]);
 
   useEffect(() => {
     if (!isOpen || !user?.uid || !todayStr) return undefined;
     let cancelled = false;
-    setAdhkarState({ morning: {}, evening: {} });
+    setAdhkarState(emptyProgress());
     setLoadingProgress(true);
     setProgressError(null);
     getDoc(doc(db, 'adhkarProgress', user.uid, todayStr))
       .then((snapshot) => {
         if (cancelled) return;
         const saved = snapshot.exists() ? snapshot.data() : {};
-        setAdhkarState({
-          morning: Object.fromEntries(
-            Object.entries(saved.morning || {}).map(([id, value]) => [id, Number(value?.count) || 0])
-          ),
-          evening: Object.fromEntries(
-            Object.entries(saved.evening || {}).map(([id, value]) => [id, Number(value?.count) || 0])
-          ),
-        });
+        const progress = emptyProgress();
+        for (const category of ADHKAR_CATEGORIES) {
+          progress[category.id] = Object.fromEntries(
+            Object.entries(saved?.[category.id] || {}).map(([id, value]) => [
+              id,
+              Math.max(0, Number(value?.count) || 0),
+            ])
+          );
+        }
+        setAdhkarState(progress);
       })
       .catch((error) => {
         if (cancelled) return;
         console.error('Failed to load adhkar progress:', error);
-        setProgressError('تعذر تحميل التقدم المحفوظ للأذكار من قاعدة البيانات.');
+        setProgressError('تعذر تحميل التقدم المحفوظ للأذكار.');
       })
       .finally(() => {
         if (!cancelled) setLoadingProgress(false);
@@ -71,363 +75,262 @@ export function AdhkarReaderModal({
 
   if (!isOpen) return null;
 
-  const currentList = category === 'morning' ? MORNING_ADHKAR : EVENING_ADHKAR;
-
-  const getRemainingCount = (dhikr) => {
-    const current = adhkarState[category]?.[dhikr.id] || 0;
-    return Math.max(0, dhikr.count - current);
-  };
-
   const saveDhikrProgress = (progressCategory, dhikrId, count) => {
     if (!user?.uid || !todayStr) {
-      setProgressError('تعذر حفظ تقدم الذكر لأن المستخدم أو التاريخ غير متاح.');
-      return Promise.reject(new Error('Missing user or date for adhkar progress.'));
+      const error = new Error('Missing user or date for adhkar progress.');
+      setProgressError('تعذر حفظ التقدم لأن الحساب أو التاريخ غير متاح.');
+      return Promise.reject(error);
     }
 
+    const reference = doc(
+      db,
+      'adhkarProgress',
+      user.uid,
+      todayStr,
+      progressCategory,
+      dhikrId
+    );
     const save = saveQueueRef.current.then(
-      () => setDoc(doc(db, 'adhkarProgress', user.uid, todayStr, progressCategory, dhikrId), {
-        count,
-        updatedAt: serverTimestamp(),
-      }),
-      () => setDoc(doc(db, 'adhkarProgress', user.uid, todayStr, progressCategory, dhikrId), {
-        count,
-        updatedAt: serverTimestamp(),
-      })
+      () => setDoc(reference, { count, updatedAt: serverTimestamp() }),
+      () => setDoc(reference, { count, updatedAt: serverTimestamp() })
     );
     saveQueueRef.current = save.catch((error) => {
       console.error('Failed to save adhkar progress:', error);
-      setProgressError('تعذر حفظ تقدم الذكر في قاعدة البيانات. حاول مرة أخرى.');
+      setProgressError('تعذر حفظ التقدم. تحقق من الاتصال وحاول مرة أخرى.');
     });
     return save;
   };
 
   const handleTapDhikr = (dhikr) => {
     if (loadingProgress) return;
-    const current = adhkarState[category]?.[dhikr.id] || 0;
-    if (current < dhikr.count) {
-      const next = current + 1;
-      const updatedCategory = { ...adhkarState[category], [dhikr.id]: next };
-      const updated = { ...adhkarState, [category]: updatedCategory };
-      setAdhkarState(updated);
-      setProgressError(null);
+    const currentCount = adhkarState[categoryId]?.[dhikr.id] || 0;
+    if (currentCount >= dhikr.count) return;
 
-      if (navigator.vibrate) {
-        navigator.vibrate(12);
-      }
+    const nextCount = currentCount + 1;
+    const updatedCategory = { ...adhkarState[categoryId], [dhikr.id]: nextCount };
+    setAdhkarState((state) => ({ ...state, [categoryId]: updatedCategory }));
+    setProgressError(null);
+    if (navigator.vibrate) navigator.vibrate(12);
 
-      // Check if all adhkar in this category are completed
-      const allDone = currentList.every((d) => (updatedCategory[d.id] || 0) >= d.count);
-      void saveDhikrProgress(category, dhikr.id, next).then(() => {
-        if (allDone && onCompleteCategory) {
-          return onCompleteCategory(category === 'morning' ? 'أذكار الصباح' : 'أذكار المساء');
+    const isDailyRoutine = categoryId === 'morning' || categoryId === 'evening';
+    const allDone = currentList.every(
+      (item) => (updatedCategory[item.id] || 0) >= item.count
+    );
+    void saveDhikrProgress(categoryId, dhikr.id, nextCount)
+      .then(() => {
+        if (isDailyRoutine && allDone && onCompleteCategory) {
+          return onCompleteCategory(categoryId === 'morning' ? 'أذكار الصباح' : 'أذكار المساء');
         }
         return undefined;
-      }).catch((error) => {
-        console.error('Failed to persist completed adhkar category:', error);
-        setProgressError('تم حفظ تقدم الذكر، لكن تعذر تسجيل إتمام النشاط اليومي.');
+      })
+      .catch((error) => {
+        console.error('Failed to persist adhkar progress:', error);
+        if (isDailyRoutine && allDone) {
+          setProgressError('حُفظ الذكر، لكن تعذر تسجيل إتمام الورد اليومي.');
+        }
+      });
+  };
+
+  const resetDhikr = (dhikr) => {
+    setAdhkarState((state) => ({
+      ...state,
+      [categoryId]: { ...state[categoryId], [dhikr.id]: 0 },
+    }));
+    setProgressError(null);
+    void saveDhikrProgress(categoryId, dhikr.id, 0).catch((error) => {
+      console.error('Failed to reset adhkar progress:', error);
+    });
+  };
+
+  const resetCategory = () => {
+    setAdhkarState((state) => ({
+      ...state,
+      [categoryId]: Object.fromEntries(currentList.map((dhikr) => [dhikr.id, 0])),
+    }));
+    setProgressError(null);
+    for (const dhikr of currentList) {
+      void saveDhikrProgress(categoryId, dhikr.id, 0).catch((error) => {
+        console.error('Failed to reset adhkar category progress:', error);
       });
     }
   };
 
-  const handleResetCurrent = (id) => {
-    setAdhkarState((prev) => ({
-      ...prev,
-      [category]: { ...prev[category], [id]: 0 },
-    }));
-    void saveDhikrProgress(category, id, 0).catch(() => {});
-  };
-
-  const handleResetAll = () => {
-    setAdhkarState((prev) => ({
-      ...prev,
-      [category]: Object.fromEntries(currentList.map((dhikr) => [dhikr.id, 0])),
-    }));
-    currentList.forEach((dhikr) => {
-      void saveDhikrProgress(category, dhikr.id, 0).catch(() => {});
-    });
-  };
-
   const completedCount = currentList.filter(
-    (d) => (adhkarState[category]?.[d.id] || 0) >= d.count
+    (dhikr) => (adhkarState[categoryId]?.[dhikr.id] || 0) >= dhikr.count
   ).length;
-
-  const progressPercent = Math.round((completedCount / currentList.length) * 100);
-
-  // Dynamic Theme Palette for reducing eye strain
-  const themeStyles = {
-    normal: {
-      modalBg: 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100',
-      headerBg: 'bg-slate-50 dark:bg-slate-800/80 border-slate-100 dark:border-slate-800',
-      cardBg: 'bg-white dark:bg-slate-900/90 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100',
-      cardDoneBg: 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800',
-      subText: 'text-slate-500 dark:text-slate-400',
-    },
-    night: {
-      modalBg: 'bg-[#0b0f19] border-slate-800 text-[#e2e8f0]',
-      headerBg: 'bg-[#111827] border-slate-800/90',
-      cardBg: 'bg-[#131b2e] border-[#1e293b] text-[#f1f5f9] hover:border-emerald-500/50',
-      cardDoneBg: 'bg-emerald-950/30 border-emerald-700/60 text-emerald-200',
-      subText: 'text-slate-400',
-    },
-    sepia: {
-      modalBg: 'bg-[#fbf7ee] border-[#e8dfc8] text-[#3e3427]',
-      headerBg: 'bg-[#f4ecdb] border-[#e2d5bc]',
-      cardBg: 'bg-[#fdfbf7] border-[#e6dbc4] text-[#2c2214]',
-      cardDoneBg: 'bg-[#e9f4ea] border-[#badcbe] text-[#1c4b22]',
-      subText: 'text-[#7d6f5c]',
-    },
-  }[readerTheme];
-
-  const fontClass = {
-    sm: 'text-sm leading-relaxed',
-    md: 'text-base leading-loose',
-    lg: 'text-lg sm:text-xl leading-loose',
-    xl: 'text-xl sm:text-2xl leading-loose',
-  }[fontSize];
+  const progressPercent = currentList.length
+    ? Math.round((completedCount / currentList.length) * 100)
+    : 0;
+  const CategoryIcon = categoryId === 'evening' ? Moon : SunMedium;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="قارئ الأذكار"
-      className="fixed inset-0 z-[70] h-[100dvh] w-full bg-black/75 backdrop-blur-sm animate-in fade-in"
+      aria-label="دليل الأذكار والأدعية"
+      className="fixed inset-0 z-[70] flex h-[100dvh] w-full flex-col bg-[#f7f4ed] text-slate-800"
     >
-      <div className={`h-full w-full max-w-none flex flex-col shadow-2xl overflow-hidden text-right transition-colors duration-200 ${themeStyles.modalBg}`}>
-        {(loadingProgress || progressError) && (
-          <div className={`px-4 py-2 text-xs ${progressError ? 'bg-red-100 text-red-800' : 'bg-sky-100 text-sky-800'}`}>
-            {progressError || 'جارٍ تحميل تقدم الأذكار المحفوظ...'}
+      <header className="flex min-h-16 items-center justify-between gap-3 border-b border-slate-200 bg-white/90 px-4 py-3 shadow-sm backdrop-blur sm:px-7">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+            <CategoryIcon className="h-5 w-5" />
           </div>
-        )}
-        {/* Header */}
-        <div className={`p-4 sm:p-5 border-b flex items-center justify-between gap-3 ${themeStyles.headerBg}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-xl shadow-xs shrink-0 ${
-              category === 'morning'
-                ? 'bg-amber-500 text-white shadow-amber-500/20'
-                : 'bg-indigo-600 text-white shadow-indigo-600/20'
-            }`}>
-              {category === 'morning' ? <SunMedium className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
-            </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-black flex items-center gap-2">
-                <span>{category === 'morning' ? 'أذكار الصباح المباركة' : 'أذكار المساء والسكينة'}</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-600 text-white">
-                  {completedCount}/{currentList.length} تم
-                </span>
-              </h3>
-              <p className={`text-xs ${themeStyles.subText}`}>
-                انقر على الذكر لإنقاص عدّاده عند القراءة
-              </p>
-            </div>
+          <div className="min-w-0">
+            <h1 className="truncate text-sm font-bold sm:text-base">دليل الأذكار والأدعية</h1>
+            <p className="truncate text-xs text-slate-500">{activeCategory.title}</p>
           </div>
-
-          <button
-            type="button"
-            onClick={closeReader}
-            aria-label="إغلاق قارئ الأذكار"
-            className="w-9 h-9 rounded-full bg-black/10 dark:bg-white/10 hover:bg-black/20 text-current flex items-center justify-center shrink-0 cursor-pointer"
-            title="إغلاق"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
+        <button
+          type="button"
+          onClick={closeReader}
+          aria-label="إغلاق دليل الأذكار"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </header>
 
-        {/* Reader Comfort & Font Size Control Bar */}
-        <div className={`px-4 py-2.5 border-b flex items-center justify-between gap-3 flex-wrap ${themeStyles.headerBg}`}>
-          {/* Mode selector: Morning / Evening */}
-          <div className="flex items-center gap-1.5 p-1 bg-black/5 dark:bg-white/5 rounded-xl">
-            <button
-              type="button"
-              onClick={() => {
-                setCategory('morning');
-                setAdhkarState({});
-              }}
-              className={`py-1 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                category === 'morning'
-                  ? 'bg-amber-500 text-white shadow-xs'
-                  : 'text-current opacity-70 hover:opacity-100'
-              }`}
-            >
-              أذكار الصباح
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCategory('evening');
-                setAdhkarState({});
-              }}
-              className={`py-1 px-2.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                category === 'evening'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-current opacity-70 hover:opacity-100'
-              }`}
-            >
-              أذكار المساء
-            </button>
+      <nav
+        aria-label="مناسبات الأذكار"
+        className="flex gap-2 overflow-x-auto border-b border-slate-200 bg-white px-4 py-3 sm:px-7"
+      >
+        {ADHKAR_CATEGORIES.map((category) => (
+          <button
+            key={category.id}
+            type="button"
+            onClick={() => setCategoryId(category.id)}
+            aria-pressed={categoryId === category.id}
+            className={`shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition ${
+              categoryId === category.id
+                ? 'border-emerald-700 bg-emerald-700 text-white'
+                : 'border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-800'
+            }`}
+          >
+            {category.title}
+          </button>
+        ))}
+      </nav>
+
+      <div className="h-1 w-full bg-slate-200">
+        <div
+          className="h-full bg-emerald-600 transition-all"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+
+      <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-7 sm:py-7">
+        <div className="mx-auto max-w-3xl">
+          <div className="mb-5 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">{activeCategory.title}</h2>
+              <p className="mt-1 text-xs text-slate-500">{activeCategory.description}</p>
+            </div>
+            <div className="shrink-0 text-xs font-semibold text-slate-500">
+              {completedCount} / {currentList.length}
+            </div>
           </div>
 
-          {/* Reading Night Modes & Font Size Adjuster */}
-          <div className="flex items-center gap-3">
-            {/* Eye-friendly Theme options */}
-            <div className="flex items-center gap-1" title="نمط الإضاءة وحماية العين">
-              <button
-                type="button"
-                onClick={() => setReaderTheme('night')}
-                className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  readerTheme === 'night'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'opacity-60 hover:opacity-100'
-                }`}
-                title="الوضع الليلي المركز (راحة العين)"
-              >
-                <Moon className="w-3.5 h-3.5" />
-                <span>ليلي مريح</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setReaderTheme('sepia')}
-                className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  readerTheme === 'sepia'
-                    ? 'bg-[#d6c5a3] text-[#2c2214] font-black shadow-xs'
-                    : 'opacity-60 hover:opacity-100'
-                }`}
-                title="ورق دافئ (سيبيا)"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>دافئ</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setReaderTheme('normal')}
-                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  readerTheme === 'normal'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'opacity-60 hover:opacity-100'
-                }`}
-                title="العادي"
-              >
-                عادي
-              </button>
+          {(loadingProgress || progressError) && (
+            <div
+              role={progressError ? 'alert' : 'status'}
+              className={`mb-4 rounded-xl px-4 py-3 text-xs ${
+                progressError
+                  ? 'bg-rose-50 text-rose-800'
+                  : 'bg-sky-50 text-sky-800'
+              }`}
+            >
+              {progressError || 'جارٍ تحميل تقدمك المحفوظ...'}
             </div>
+          )}
 
-            {/* Font Size Buttons */}
-            <div className="flex items-center gap-0.5 bg-black/5 dark:bg-white/5 p-0.5 rounded-xl">
-              <span className="text-[10px] px-1 opacity-70">حجم الخط:</span>
-              {['sm', 'md', 'lg', 'xl'].map((sz) => (
-                <button
-                  key={sz}
-                  type="button"
-                  onClick={() => setFontSize(sz)}
-                  className={`w-6 h-6 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
-                    fontSize === sz
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'opacity-60 hover:opacity-100'
+          <div className="space-y-3">
+            {currentList.map((dhikr, index) => {
+              const count = adhkarState[categoryId]?.[dhikr.id] || 0;
+              const isComplete = count >= dhikr.count;
+              return (
+                <article
+                  key={dhikr.id}
+                  className={`overflow-hidden rounded-2xl border bg-white shadow-sm transition ${
+                    isComplete ? 'border-emerald-300' : 'border-slate-200'
                   }`}
                 >
-                  {sz === 'sm' ? 'ص' : sz === 'md' ? 'م' : sz === 'lg' ? 'ك' : 'ك+'}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="w-full bg-black/10 dark:bg-white/10 h-1.5 overflow-hidden">
-          <div
-            className="bg-emerald-500 h-full transition-all duration-300"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-
-        {/* Scrollable Adhkar List */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-          {currentList.map((dhikr, idx) => {
-            const current = adhkarState[dhikr.id] || 0;
-            const remaining = getRemainingCount(dhikr);
-            const isFinished = remaining === 0;
-
-            return (
-              <div
-                key={dhikr.id}
-                onClick={() => handleTapDhikr(dhikr)}
-                className={`p-4 sm:p-5 rounded-3xl border transition-all cursor-pointer select-none relative ${
-                  isFinished ? themeStyles.cardDoneBg : themeStyles.cardBg
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3 mb-2.5">
-                  <span className="text-[11px] font-bold opacity-60 bg-black/5 dark:bg-white/5 px-2.5 py-0.5 rounded-lg">
-                    الذكر {idx + 1} من {currentList.length}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {current > 0 && !isFinished && (
+                  <button
+                    type="button"
+                    onClick={() => handleTapDhikr(dhikr)}
+                    disabled={loadingProgress || isComplete}
+                    className="w-full p-4 text-right transition hover:bg-emerald-50/40 disabled:cursor-default sm:p-5"
+                  >
+                    <span className="mb-3 flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-semibold text-slate-400">
+                        {index + 1} / {currentList.length}
+                      </span>
+                      <span
+                        className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
+                          isComplete
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {isComplete && <Check className="h-3.5 w-3.5" />}
+                        {isComplete ? 'اكتمل' : `${count} من ${dhikr.count}`}
+                      </span>
+                    </span>
+                    <span className="block font-serif text-xl leading-[2.1] text-[#3d3426] sm:text-2xl">
+                      {dhikr.text}
+                    </span>
+                    {!isComplete && (
+                      <span className="mt-3 block text-[11px] font-semibold text-emerald-700">
+                        اضغط للتسبيح والمتابعة
+                      </span>
+                    )}
+                  </button>
+                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-2.5 sm:px-5">
+                    {dhikr.source ? (
+                      <a
+                        href={dhikr.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        className="text-[11px] font-medium text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-emerald-800"
+                      >
+                        المصدر: {dhikr.source}
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-slate-400">ذكر مأثور</span>
+                    )}
+                    {count > 0 && (
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleResetCurrent(dhikr.id);
-                        }}
-                        className="text-[11px] opacity-60 hover:opacity-100 hover:text-red-400 flex items-center gap-0.5 px-2 py-0.5 rounded-md cursor-pointer"
-                        title="إعادة تعيين هذا الذكر"
+                        onClick={() => resetDhikr(dhikr)}
+                        aria-label={`إعادة عداد الذكر ${index + 1}`}
+                        className="flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-[11px] text-slate-500 transition hover:bg-slate-100 hover:text-rose-700"
                       >
-                        <RotateCcw className="w-3 h-3" />
-                        <span>تصفير</span>
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        إعادة
                       </button>
                     )}
-                    <span
-                      className={`text-xs font-black px-3 py-1 rounded-xl flex items-center gap-1.5 shadow-2xs ${
-                        isFinished
-                          ? 'bg-emerald-600 text-white'
-                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      }`}
-                    >
-                      {isFinished ? (
-                        <>
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>اكتمل الحصن ✓</span>
-                        </>
-                      ) : (
-                        <span>متبقي: {remaining} مرات</span>
-                      )}
-                    </span>
                   </div>
-                </div>
-
-                {/* Arabic Text with selected font size & typography */}
-                <p className={`font-bold font-serif ${fontClass}`}>
-                  {dhikr.text}
-                </p>
-
-                {/* Virtue footnote */}
-                {dhikr.virtue && (
-                  <div className="mt-3 pt-2.5 border-t border-current/10 flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>الفضل: {dhikr.virtue}</span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+                </article>
+              );
+            })}
+          </div>
         </div>
+      </main>
 
-        {/* Footer */}
-        <div className={`p-4 border-t flex items-center justify-between gap-2 ${themeStyles.headerBg}`}>
-          <button
-            type="button"
-            onClick={handleResetAll}
-            className="text-xs font-bold opacity-70 hover:opacity-100 hover:text-red-500 px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>تصفير جميع العدادات</span>
-          </button>
-          <button
-            type="button"
-            onClick={closeReader}
-            className="py-2.5 px-6 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer"
-          >
-            إتمام وإغلاق
-          </button>
+      <footer className="flex items-center justify-between border-t border-slate-200 bg-white px-4 py-3 sm:px-7">
+        <div className="flex items-center gap-2 text-xs text-slate-500">
+          <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+          <span>{progressPercent}% أُنجز</span>
         </div>
-      </div>
+        <button
+          type="button"
+          onClick={resetCategory}
+          className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-rose-50 hover:text-rose-700"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+          تصفير القسم
+        </button>
+      </footer>
     </div>
   );
 }

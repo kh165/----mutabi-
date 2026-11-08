@@ -14,21 +14,6 @@ import { useReaderHistory } from '../hooks/useReaderHistory.js';
 
 const READING_PAGE_KEY = 'mutabi_quran_last_page';
 const BOOKMARKS_KEY = 'mutabi_quran_bookmarks';
-const TAJWEED_CLASSES = new Set([
-  'ham_wasl',
-  'laam_shamsiyah',
-  'madda_normal',
-  'madda_permissible',
-  'madda_necessary',
-  'madda_obligatory',
-  'ghunnah',
-  'idgham_ghunnah',
-  'idgham_wo_ghunnah',
-  'ikhafa',
-  'iqlab',
-  'qalaqah',
-  'slnt',
-]);
 
 function readStoredPage(initialSurahNumber) {
   try {
@@ -56,22 +41,6 @@ function readBookmarks() {
     console.warn('Could not read saved Quran bookmarks:', error);
     return [];
   }
-}
-
-function renderTajweedText(markup) {
-  const textWithoutVerseNumber = markup.replace(/<span class=end>.*?<\/span>/g, '');
-  return textWithoutVerseNumber
-    .split(/(<tajweed class=[\w-]+>.*?<\/tajweed>)/g)
-    .filter(Boolean)
-    .map((part, index) => {
-      const match = part.match(/^<tajweed class=([\w-]+)>([\s\S]*)<\/tajweed>$/);
-      if (!match || !TAJWEED_CLASSES.has(match[1])) return part;
-      return (
-        <span key={`${match[1]}-${index}`} className={`tajweed-${match[1]}`}>
-          {match[2]}
-        </span>
-      );
-    });
 }
 
 function getVerseDetails(verseKey) {
@@ -203,7 +172,7 @@ export function QuranReaderModal({ isOpen, onClose, initialSurahNumber = 1, onLo
             focusedVerseKey === verse.verseKey ? 'quran-ayah-focused' : ''
           }`}
         >
-          <span>{renderTajweedText(verse.text)}</span>
+          <span>{verse.text}</span>
           <span className="quran-ayah-marker" aria-hidden="true">
             {verseNumber.toLocaleString('ar-EG')}
           </span>

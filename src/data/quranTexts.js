@@ -252,7 +252,8 @@ const isValidMushafPage = (page) =>
     (verse) =>
       /^\d{1,3}:\d{1,3}$/.test(verse.verseKey) &&
       typeof verse.text === 'string' &&
-      verse.text.trim()
+      verse.text.trim() &&
+      !/[<>]/.test(verse.text)
   );
 
 export async function getMushafPage(pageNumber) {
@@ -261,7 +262,7 @@ export async function getMushafPage(pageNumber) {
     throw new Error('رقم صفحة المصحف يجب أن يكون بين 1 و604.');
   }
 
-  const cacheKey = `quran_mushaf_tajweed_page_${page}`;
+  const cacheKey = `quran_mushaf_uthmani_page_v1_${page}`;
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -276,7 +277,7 @@ export async function getMushafPage(pageNumber) {
   }
 
   const response = await fetch(
-    `https://api.quran.com/api/v4/quran/verses/uthmani_tajweed?page_number=${page}`
+    `https://api.quran.com/api/v4/quran/verses/uthmani?page_number=${page}`
   );
   if (!response.ok) {
     throw new Error(`تعذر تحميل صفحة المصحف ${page} (HTTP ${response.status}).`);
@@ -288,7 +289,7 @@ export async function getMushafPage(pageNumber) {
     verses: Array.isArray(data?.verses)
       ? data.verses.map((verse) => ({
           verseKey: verse.verse_key,
-          text: verse.text_uthmani_tajweed,
+          text: verse.text_uthmani?.trim(),
         }))
       : [],
   };

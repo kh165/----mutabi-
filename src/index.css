@@ -144,31 +144,6 @@
   vertical-align: middle;
 }
 
-.tajweed-ham_wasl,
-.tajweed-laam_shamsiyah,
-.tajweed-slnt {
-  color: #9b653d;
-}
-
-.tajweed-madda_normal,
-.tajweed-madda_permissible,
-.tajweed-madda_necessary,
-.tajweed-madda_obligatory {
-  color: #527b53;
-}
-
-.tajweed-ghunnah,
-.tajweed-idgham_ghunnah,
-.tajweed-idgham_wo_ghunnah {
-  color: #a64e44;
-}
-
-.tajweed-ikhafa,
-.tajweed-iqlab,
-.tajweed-qalaqah {
-  color: #4e8060;
-}
-
 @media (max-width: 640px) {
   .quran-page-text {
     font-size: calc(1.2rem * var(--quran-font-scale, 1));

@@ -234,82 +234,61 @@ export async function getSurahAyahs(surahNumber) {
 }
 
 /**
- * Pre-bundled authentic Tafseer Al-Muyassar for instant offline access
- * (Source: King Fahd Complex for the Printing of the Holy Quran)
- */
-export const BUNDLED_TAFSEER = {
-  1: {
-    1: "سورة الفاتحة سميت هذه السورة بالفاتحة؛ لأنه يفتتح بها القرآن العظيم، وتسمى المثاني؛ لأنها تقرأ في كل ركعة، ولها أسماء أخر. أبتدئ قراءة القرآن باسم الله مستعينا به، (اللهِ) علم على الرب -تبارك وتعالى- المعبود بحق دون سواه، وهو أخص أسماء الله تعالى، ولا يسمى به غيره سبحانه. (الرَّحْمَنِ) ذي الرحمة العامة الذي وسعت رحمته جميع الخلق، (الرَّحِيمِ) بالمؤمنين، وهما اسمان من أسمائه تعالى.",
-    2: "الثناء على الله بصفاته التي كلُّها أوصاف كمال، وبنعمه الظاهرة والباطنة، الدينية والدنيوية، وفي ضمنه أَمْرٌ لعباده أن يحمدوه، فهو المستحق له وحده، وهو سبحانه المنشئ للخلق، القائم بأمورهم، المربي لجميع خلقه بنعمه، ولأوليائه بالإيمان والعمل الصالح.",
-    3: "(الرَّحْمَنِ) ذي الرحمة العامة الشاملة لجميع الخلق في الدنيا وللمؤمنين في الآخرة، (الرَّحِيمِ) بالمؤمنين خاصة، وهما اسمان من أسماء الله تعالى يدلان على عظيم رحمته وسعتها.",
-    4: "تمجيد لله تعالى بأنه المالك المتصرف الوحيد في يوم القيامة، وهو يوم الحساب والجزاء على الأعمال، وتخصيص الملك بيوم الدين؛ لأنه لا يدَّعي أحد هناك ملكًا ولا يتكلم أحد إلا بإذنه سبحانه.",
-    5: "نخصك وحدك بالعبادة، ونستعين بك وحدك في جميع أمورنا؛ فالأمر كله بيدك، ولا عون ولا توفيق إلا منك سبحانه.",
-    6: "دُلَّنا، وأرشدنا، ووفقنا إلى الطريق الواضح المستقيم الذي لا عوج فيه، وهو دين الإسلام الذي بعثت به نبيك محمدا صلى الله عليه وسلم.",
-    7: "طريق الذين أنعمت عليهم من النبيين والصدِّيقين والشهداء والصالحين، غير طريق المغضوب عليهم الذين عرفوا الحق ولم يعملوا به (كاليهود)، وغير طريق الضالين الذين عبدوا الله على جهل وضلال (كالنصارى)."
-  },
-  112: {
-    1: "قل -أيها الرسول- لمن سألوك عن ربك: هو الله المنفرد بالألوهية والربوبية والأسماء والصفات، لا شريك له.",
-    2: "الله الذي يقصده جميع الخلائق في حوائجهم ومسائلهم لكماله وسؤدده وغناه عن خلقه وافتقارهم إليه.",
-    3: "ليس له ولد، ولم يولد من أحد؛ لتنزهه سبحانه عن مشابهة الحوادث، وليس له كفء ولا شبيه.",
-    4: "ولم يكن له مماثل ولا نظير في ذاته ولا في أسمائه ولا في صفاته ولا في أفعاله جل وعلا."
-  },
-  113: {
-    1: "قل -أيها الرسول-: أعوذ وأعتصم برب الصبح وفالقه بنوره.",
-    2: "من شر جميع ما خلق الله من الإنس والجن والدواب وسائر المخلوقات.",
-    3: "ومن شر ليل إذا أظلم ودخل ظلامه؛ لما ينتشر فيه من الشرور والأذى.",
-    4: "ومن شر السواحر اللاتي ينفثن في عقد السحر للإضرار بالناس.",
-    5: "ومن شر حاسد إذا حسد وتمنى زوال نعمة الله عن غيره وسعى في ذلك."
-  },
-  114: {
-    1: "قل -أيها الرسول-: أعوذ وأعتصم برب الناس وخالقهم ومدبر أمورهم.",
-    2: "مالك الناس، المتصرف في جميع شؤونهم وأحوالهم، الملك الحق.",
-    3: "معبودهم الحق الذي لا إله لهم سواه ولا رب غيره.",
-    4: "من شر الشيطان الذي يوسوس عند الغفلة، ويخنس ويتأخر عند ذكر الله.",
-    5: "الذي يبث الشر والشكوك والشبهات في صدور الناس ويزين لهم المعاصي.",
-    6: "من شياطين الجن وشياطين الإنس."
-  }
-};
-
-/**
- * Fetch authentic Tafseer Al-Muyassar for a given surah,
- * caching in localStorage and falling back gracefully.
+ * جلب تفسير ميسر للسورة الكريمة مع التخزين المحلي الفوري
  */
 export async function getSurahTafseer(surahNumber) {
-  const cacheKey = `quran_tafseer_surah_${surahNumber}`;
-
-  // 1. Check pre-bundled verified set first for immediate response
-  if (BUNDLED_TAFSEER[surahNumber]) {
-    return BUNDLED_TAFSEER[surahNumber];
+  const surah = getSurah(Number(surahNumber));
+  if (!surah) {
+    throw new Error('رقم السورة غير صالح.');
   }
 
-  // 2. Check localStorage
+  const cacheKey = `mutabi_tafseer_arabic_moyassar_v1_${surahNumber}`;
   try {
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch {}
-
-  // 3. Fetch from King Fahd Complex Al-Muyassar edition via Al-Quran Cloud
-  try {
-    const res = await fetch(`https://api.alquran.cloud/v1/surah/${surahNumber}/ar.muyassar`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.data?.ayahs) {
-        const map = {};
-        data.data.ayahs.forEach((a) => {
-          map[a.numberInSurah] = a.text;
-        });
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(map));
-        } catch {}
-        return map;
+      const saved = JSON.parse(cached);
+      const verses = Object.values(saved);
+      if (
+        verses.length === surah.ayahsCount &&
+        verses.every((text) => typeof text === 'string' && text.trim())
+      ) {
+        return saved;
       }
+      localStorage.removeItem(cacheKey);
     }
-  } catch (err) {
-    console.warn('Network fetch for Tafseer failed:', err);
+  } catch (error) {
+    console.warn('Could not read the cached tafsir:', error);
   }
 
-  return {};
-}
+  const response = await fetch(
+    `https://quranenc.com/api/v1/translation/sura/arabic_moyassar/${surahNumber}`
+  );
+  if (!response.ok) {
+    throw new Error(`تعذر تحميل التفسير الميسر للسورة ${surahNumber} (HTTP ${response.status}).`);
+  }
 
+  const data = await response.json();
+  const map = Object.fromEntries(
+    (Array.isArray(data?.result) ? data.result : [])
+      .filter(
+        (verse) =>
+          Number(verse.sura) === Number(surahNumber) &&
+          Number.isInteger(Number(verse.aya)) &&
+          Number(verse.aya) >= 1 &&
+          Number(verse.aya) <= surah.ayahsCount &&
+          typeof verse.translation === 'string' &&
+          verse.translation.trim()
+      )
+      .map((verse) => [Number(verse.aya), verse.translation.trim()])
+  );
+  if (Object.keys(map).length !== surah.ayahsCount) {
+    throw new Error(`استجابة التفسير الميسر للسورة ${surahNumber} غير مكتملة.`);
+  }
+
+  try {
+    localStorage.setItem(cacheKey, JSON.stringify(map));
+  } catch (error) {
+    console.warn('Could not cache the tafsir locally:', error);
+  }
+  return map;
+}

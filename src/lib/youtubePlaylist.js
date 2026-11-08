@@ -151,8 +151,9 @@ function createHiddenPlayer(options) {
     (YT) =>
       new Promise((resolve, reject) => {
         const host = document.createElement('div');
+        // Place in-viewport with near-zero opacity so modern Chromium/WebKit does not throttle or sleep the iframe
         host.style.cssText =
-          'position:fixed;left:-9999px;top:0;width:200px;height:120px;opacity:0;pointer-events:none;';
+          'position:fixed;bottom:0;right:0;width:16px;height:16px;opacity:0.01;pointer-events:none;z-index:-999;overflow:hidden;';
         const inner = document.createElement('div');
         host.appendChild(inner);
         document.body.appendChild(host);

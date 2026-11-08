@@ -24,9 +24,13 @@ import {
   ListTodo,
   BookOpen,
   SunMedium,
+  CloudDownload,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
+import { getOfflinePackageStatus } from '../lib/offlineSync.js';
 
-export function Today({ onNavigateToTasbeeh }) {
+export function Today({ onNavigateToTasbeeh, onNavigateToHadith }) {
   const { user, userDoc, isAdmin, updateUserDoc } = useAuth();
   const { isDark } = useTheme();
   const { activities, loading: loadingActivities, seedPresetsToDatabase } = useActivities(false);
@@ -46,6 +50,19 @@ export function Today({ onNavigateToTasbeeh }) {
 
   // Celebratory encouragement banner
   const [encouragementBanner, setEncouragementBanner] = useState(null);
+  const [offlinePkgStatus, setOfflinePkgStatus] = useState(() => getOfflinePackageStatus());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setOfflinePkgStatus(getOfflinePackageStatus());
+    };
+    window.addEventListener('mutabi_offline_queue_update', handleUpdate);
+    window.addEventListener('mutabi_sync_status', handleUpdate);
+    return () => {
+      window.removeEventListener('mutabi_offline_queue_update', handleUpdate);
+      window.removeEventListener('mutabi_sync_status', handleUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     if (!encouragementBanner) return;
@@ -235,9 +252,9 @@ export function Today({ onNavigateToTasbeeh }) {
               «أَلَا بِذِكْرِ اللَّهِ تَطْمَئِنُّ الْقُلُوبُ» • استمر في المحافظة على وردك اليومي، واجعل كل خطوة لك اليوم بركة وقربة.
             </p>
 
-            {/* Quick Launchpad Buttons */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 pt-2">
-              {/* Quran Reader */}
+            {/* Quick Launchpad Buttons - Responsive with no text truncation */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 pt-2">
+              {/* 1. Quran Reader */}
               <button
                 type="button"
                 onClick={() => setQuranModalOpen(true)}
@@ -247,14 +264,16 @@ export function Today({ onNavigateToTasbeeh }) {
                   <BookOpen className="w-4 h-4 text-emerald-300" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="block text-xs font-bold text-white group-hover:text-emerald-200 leading-snug whitespace-normal break-words">
+                  <span className="block text-xs font-bold text-white group-hover:text-emerald-200 leading-tight whitespace-normal break-words">
                     المصحف الشريف
                   </span>
-                  <span className="block text-[10px] text-emerald-200/80 leading-tight whitespace-normal">تلاوة وراحة عين</span>
+                  <span className="block text-[10px] text-emerald-200/80 leading-tight whitespace-normal mt-0.5">
+                    تلاوة وراحة عين
+                  </span>
                 </div>
               </button>
 
-              {/* Smart Tasbeeh */}
+              {/* 2. Smart Tasbeeh */}
               <button
                 type="button"
                 onClick={onNavigateToTasbeeh}
@@ -264,14 +283,16 @@ export function Today({ onNavigateToTasbeeh }) {
                   <CircleDot className="w-4 h-4 text-teal-300" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="block text-xs font-bold text-white group-hover:text-teal-200 leading-snug whitespace-normal break-words">
+                  <span className="block text-xs font-bold text-white group-hover:text-teal-200 leading-tight whitespace-normal break-words">
                     المسبحة الذكية
                   </span>
-                  <span className="block text-[10px] text-teal-200/80 leading-tight whitespace-normal">عداد وسجل الذكر</span>
+                  <span className="block text-[10px] text-teal-200/80 leading-tight whitespace-normal mt-0.5">
+                    عداد وسجل الذكر
+                  </span>
                 </div>
               </button>
 
-              {/* Morning/Evening Adhkar */}
+              {/* 3. Morning/Evening Adhkar */}
               <button
                 type="button"
                 onClick={() => {
@@ -284,27 +305,50 @@ export function Today({ onNavigateToTasbeeh }) {
                   <SunMedium className="w-4 h-4 text-amber-300" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="block text-xs font-bold text-white group-hover:text-amber-200 leading-snug whitespace-normal break-words">
+                  <span className="block text-xs font-bold text-white group-hover:text-amber-200 leading-tight whitespace-normal break-words">
                     حصن المسلم
                   </span>
-                  <span className="block text-[10px] text-amber-200/80 leading-tight whitespace-normal">أذكار الصباح والمساء</span>
+                  <span className="block text-[10px] text-amber-200/80 leading-tight whitespace-normal mt-0.5">
+                    أذكار الصباح والمساء
+                  </span>
                 </div>
               </button>
 
-              {/* Monthly Calendar */}
+              {/* 4. Forty Hadiths */}
+              <button
+                type="button"
+                onClick={onNavigateToHadith}
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-rose-500/30 flex items-center justify-center shrink-0">
+                  <BookOpen className="w-4 h-4 text-rose-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="block text-xs font-bold text-white group-hover:text-rose-200 leading-tight whitespace-normal break-words">
+                    الأربعين النووية
+                  </span>
+                  <span className="block text-[10px] text-rose-200/80 leading-tight whitespace-normal mt-0.5">
+                    جوامع الكلم النبوي
+                  </span>
+                </div>
+              </button>
+
+              {/* 5. Monthly Calendar */}
               <button
                 type="button"
                 onClick={() => setActiveMainView(activeMainView === 'daily' ? 'calendar' : 'daily')}
-                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none cursor-pointer"
+                className="p-3 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-2xl border border-white/15 flex items-center gap-2.5 transition-all text-right group select-none cursor-pointer col-span-2 sm:col-span-1"
               >
                 <div className="w-8 h-8 rounded-xl bg-indigo-500/30 flex items-center justify-center shrink-0">
                   <CalendarDays className="w-4 h-4 text-indigo-300" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="block text-xs font-bold text-white group-hover:text-indigo-200 leading-snug whitespace-normal break-words">
+                  <span className="block text-xs font-bold text-white group-hover:text-indigo-200 leading-tight whitespace-normal break-words">
                     تقويم العبادات
                   </span>
-                  <span className="block text-[10px] text-indigo-200/80 leading-tight whitespace-normal">الصلوات والصيام</span>
+                  <span className="block text-[10px] text-indigo-200/80 leading-tight whitespace-normal mt-0.5">
+                    الصلوات والصيام
+                  </span>
                 </div>
               </button>
             </div>
@@ -332,6 +376,48 @@ export function Today({ onNavigateToTasbeeh }) {
 
       {/* Live Geolocation Prayer Times Bar & Phone Notifications */}
       <PrayerTimesBar userDoc={userDoc} updateUserDoc={updateUserDoc} />
+
+      {/* Offline Ready & Cache Download Promo Banner */}
+      <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
+        offlinePkgStatus?.isReady
+          ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/60'
+          : 'bg-gradient-to-r from-amber-50 to-emerald-50 dark:from-slate-900 dark:to-emerald-950/30 border-amber-200 dark:border-emerald-800/60'
+      }`}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              offlinePkgStatus?.isReady
+                ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300'
+                : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+            }`}>
+              <CloudDownload className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
+                {offlinePkgStatus?.isReady
+                  ? 'بيانات المنصة مهيأة وجاهزة بالكامل للعمل بدون إنترنت'
+                  : 'هل ترغب في حفظ المصحف والأذكار والأحاديث لتعمل بدون إنترنت؟'}
+              </p>
+              <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {offlinePkgStatus?.isReady
+                  ? 'تسجيل الصلوات والأذكار يعمل أوفلاين ويتم رفعه تلقائياً للسحابة فور توفر الاتصال.'
+                  : 'قم بتحميل الحزمة الكاملة لتصفح القرآن وحصن المسلم والأربعين النووية أينما كنت.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('mutabi:open-offline-modal'))}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+              offlinePkgStatus?.isReady
+                ? 'bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+            }`}
+          >
+            {offlinePkgStatus?.isReady ? 'فحص ومزامنة البيانات' : 'تحميل الحزمة الآن'}
+          </button>
+        </div>
+      </div>
 
       {/* Main View Switcher: الورد اليومي vs تقويم الصلوات والصيام */}
       <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1.5 rounded-2xl shadow-2xs">

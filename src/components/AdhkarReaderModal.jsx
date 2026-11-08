@@ -16,11 +16,26 @@ import {
   Compass,
   ZoomIn,
   ZoomOut,
-  Share2,
 } from 'lucide-react';
 import { ADHKAR_CATEGORIES } from '../data/adhkar.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { db, doc, getDoc, setDoc, serverTimestamp } from '../firebase.js';
+import { getTodayDateString } from '../lib/dates.js';
+import {
+  collection,
+  db,
+  doc,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from '../firebase.js';
+
+const getProgressStorageKey = (uid, date) =>
+  `mutabi_adhkar_counts_${uid || 'guest'}_${date || 'today'}`;
+
+const getProgressDocumentId = (date, categoryId, dhikrId) =>
+  `${date}_${categoryId}_${dhikrId}`;
 
 export function AdhkarReaderModal({
   isOpen,
@@ -29,13 +44,19 @@ export function AdhkarReaderModal({
   todayStr,
   onCompleteCategory,
 }) {
-  const { user } = useAuth();
+  const { user, userDoc } = useAuth();
+  // لو الصفحة اللي فتحت المودال ما بعتتش التاريخ نحسبه هنا، عشان التقدم يتسجل في Firestore دايمًا
+  const dayKey = todayStr || getTodayDateString(userDoc?.timezone);
+
   const [activeCategoryId, setActiveCategoryId] = useState(initialCategory);
   const [searchQuery, setSearchQuery] = useState('');
   const [counts, setCounts] = useState({});
   const [copiedId, setCopiedId] = useState(null);
   const [fontScale, setFontScale] = useState(2); // 1 to 4
   const [loadingProgress, setLoadingProgress] = useState(false);
+  const [progressSyncError, setProgressSyncError] = useState(null);
+  const [progressSyncState, setProgressSyncState] = useState('idle');
+  const countsRef = useRef({});
 
   useEffect(() => {
     if (isOpen) {
@@ -45,28 +66,138 @@ export function AdhkarReaderModal({
     }
   }, [isOpen, initialCategory]);
 
-  // Load saved counts from localStorage / Firebase
   useEffect(() => {
     if (!isOpen) return;
-    const localKey = `mutabi_adhkar_counts_${todayStr || 'today'}`;
+    const localKey = getProgressStorageKey(user?.uid, dayKey);
+    const localCounts = {};
     try {
       const saved = localStorage.getItem(localKey);
-      if (saved) {
-        setCounts(JSON.parse(saved));
+      if (saved) Object.assign(localCounts, JSON.parse(saved));
+      else if (user?.uid) {
+        const owner = localStorage.getItem('mutabi_adhkar_counts_owner');
+        if (!owner || owner === user.uid) {
+          const legacy = localStorage.getItem(`mutabi_adhkar_counts_${dayKey || 'today'}`);
+          if (legacy) {
+            Object.assign(localCounts, JSON.parse(legacy));
+            localStorage.setItem(localKey, JSON.stringify(localCounts));
+            localStorage.setItem('mutabi_adhkar_counts_owner', user.uid);
+          }
+        }
       }
-    } catch {}
-  }, [isOpen, todayStr]);
+    } catch (error) {
+      console.warn('Could not read saved adhkar progress:', error);
+    }
+
+    setCounts(localCounts);
+    countsRef.current = localCounts;
+    setProgressSyncError(null);
+    if (!user?.uid || !dayKey) {
+      setLoadingProgress(false);
+      setProgressSyncState('local');
+      return;
+    }
+
+    setLoadingProgress(true);
+    setProgressSyncState(navigator.onLine ? 'syncing' : 'offline');
+    const migratingIds = new Set();
+    const progressQuery = query(
+      collection(db, 'users', user.uid, 'adhkarProgress'),
+      where('date', '==', dayKey)
+    );
+    const unsubscribe = onSnapshot(
+      progressQuery,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        const cloudCounts = {};
+        snapshot.forEach((progressDoc) => {
+          const progress = progressDoc.data();
+          if (typeof progress.dhikrId === 'string') {
+            cloudCounts[progress.dhikrId] = Math.max(0, Number(progress.count) || 0);
+          }
+        });
+
+        if (snapshot.metadata.fromCache) {
+          const mergedCounts = { ...countsRef.current, ...cloudCounts };
+          countsRef.current = mergedCounts;
+          setCounts(mergedCounts);
+          setProgressSyncState(navigator.onLine ? 'syncing' : 'offline');
+          return;
+        }
+
+        setLoadingProgress(false);
+        setProgressSyncState('synced');
+        setProgressSyncError(null);
+
+        const itemCategories = new Map(
+          ADHKAR_CATEGORIES.flatMap((category) =>
+            category.items.map((item) => [item.id, category.id])
+          )
+        );
+        const missingLocalProgress = Object.entries(localCounts).filter(
+          ([dhikrId, count]) =>
+            itemCategories.has(dhikrId) &&
+            Number(count) > 0 &&
+            !Object.hasOwn(cloudCounts, dhikrId) &&
+            !migratingIds.has(dhikrId)
+        );
+        if (missingLocalProgress.length > 0) {
+          const migrations = missingLocalProgress.map(([dhikrId, count]) => {
+            const categoryId = itemCategories.get(dhikrId);
+            migratingIds.add(dhikrId);
+            return setDoc(
+              doc(
+                db,
+                'users',
+                user.uid,
+                'adhkarProgress',
+                getProgressDocumentId(dayKey, categoryId, dhikrId)
+              ),
+              {
+                uid: user.uid,
+                date: dayKey,
+                categoryId,
+                dhikrId,
+                count: Math.min(100, Number(count)),
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            ).finally(() => migratingIds.delete(dhikrId));
+          });
+          void Promise.all(migrations).catch((error) => {
+            console.error('Failed to sync existing adhkar progress:', error);
+            setProgressSyncState('error');
+            setProgressSyncError('تعذر مزامنة تقدمك المحفوظ. تحقق من الاتصال أو صلاحيات قاعدة البيانات.');
+          });
+          return;
+        }
+
+        countsRef.current = cloudCounts;
+        setCounts(cloudCounts);
+        try {
+          localStorage.setItem(localKey, JSON.stringify(cloudCounts));
+        } catch (error) {
+          console.warn('Could not cache synchronized adhkar progress:', error);
+        }
+      },
+      (error) => {
+        console.error('Failed to sync adhkar progress:', error);
+        setLoadingProgress(false);
+        setProgressSyncState('error');
+        setProgressSyncError('تعذرت مزامنة تقدم الأذكار. تحقق من الاتصال أو صلاحيات قاعدة البيانات.');
+      }
+    );
+
+    return () => unsubscribe();
+  }, [isOpen, dayKey, user?.uid]);
 
   if (!isOpen) return null;
 
   const activeCategory =
     ADHKAR_CATEGORIES.find((c) => c.id === activeCategoryId) || ADHKAR_CATEGORIES[0];
 
-  // Filter items based on active category and search query
   let displayedItems = activeCategory.items;
   if (searchQuery.trim()) {
     const q = searchQuery.trim().toLowerCase();
-    // Search across ALL categories when search is active
     const allItems = ADHKAR_CATEGORIES.flatMap((c) =>
       c.items.map((item) => ({ ...item, categoryTitle: c.title }))
     );
@@ -79,33 +210,71 @@ export function AdhkarReaderModal({
     );
   }
 
+  // نكتب القيمة المطلقة للعدّاد (وليس increment) حتى يتطابق Firestore مع الشاشة دائمًا
+  const persistCount = (dhikrId, categoryId, count, errorMessage) => {
+    if (!user?.uid || !dayKey || !categoryId) return;
+    setProgressSyncError(null);
+    void setDoc(
+      doc(
+        db,
+        'users',
+        user.uid,
+        'adhkarProgress',
+        getProgressDocumentId(dayKey, categoryId, dhikrId)
+      ),
+      {
+        uid: user.uid,
+        date: dayKey,
+        categoryId,
+        dhikrId,
+        count,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    ).then(
+      () => setProgressSyncState('synced'),
+      (error) => {
+        console.error('Failed to save adhkar progress:', error);
+        setProgressSyncState('error');
+        setProgressSyncError(errorMessage);
+      }
+    );
+  };
+
   const handleIncrement = (id, targetCount) => {
-    // Haptic vibration feedback on mobile
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(25);
     }
 
-    setCounts((prev) => {
-      const current = prev[id] || 0;
-      if (current >= targetCount) return prev;
-      const nextCount = current + 1;
-      const nextState = { ...prev, [id]: nextCount };
-      try {
-        localStorage.setItem(`mutabi_adhkar_counts_${todayStr || 'today'}`, JSON.stringify(nextState));
-      } catch {}
-      return nextState;
-    });
+    const currentCount = countsRef.current[id] || 0;
+    if (currentCount >= targetCount) return;
+    const nextCount = currentCount + 1;
+    const nextState = { ...countsRef.current, [id]: nextCount };
+    countsRef.current = nextState;
+    setCounts(nextState);
+    try {
+      localStorage.setItem(getProgressStorageKey(user?.uid, dayKey), JSON.stringify(nextState));
+    } catch (error) {
+      console.warn('Could not cache adhkar progress:', error);
+    }
+    const categoryId =
+      ADHKAR_CATEGORIES.find((category) => category.items.some((item) => item.id === id))?.id;
+    persistCount(id, categoryId, nextCount, 'تعذر مزامنة هذا الذكر. تم الاحتفاظ به على هذا الجهاز.');
   };
 
   const handleResetDhikr = (e, id) => {
     e.stopPropagation();
-    setCounts((prev) => {
-      const nextState = { ...prev, [id]: 0 };
-      try {
-        localStorage.setItem(`mutabi_adhkar_counts_${todayStr || 'today'}`, JSON.stringify(nextState));
-      } catch {}
-      return nextState;
-    });
+    const nextState = { ...countsRef.current, [id]: 0 };
+    countsRef.current = nextState;
+    setCounts(nextState);
+    try {
+      localStorage.setItem(getProgressStorageKey(user?.uid, dayKey), JSON.stringify(nextState));
+    } catch (error) {
+      console.warn('Could not cache reset adhkar progress:', error);
+    }
+    const categoryId =
+      ADHKAR_CATEGORIES.find((category) => category.items.some((item) => item.id === id))?.id;
+    persistCount(id, categoryId, 0, 'تعذر مزامنة إعادة العداد. تم الاحتفاظ بالتغيير على هذا الجهاز.');
   };
 
   const handleCopyText = (e, id, text) => {
@@ -115,7 +284,6 @@ export function AdhkarReaderModal({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Calculate category progress
   const completedInActive = activeCategory.items.filter(
     (item) => (counts[item.id] || 0) >= item.count
   ).length;
@@ -168,7 +336,6 @@ export function AdhkarReaderModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Font Sizer */}
             <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
               <button
                 type="button"
@@ -191,7 +358,6 @@ export function AdhkarReaderModal({
               </button>
             </div>
 
-            {/* Close Button */}
             <button
               type="button"
               onClick={onClose}
@@ -206,7 +372,6 @@ export function AdhkarReaderModal({
 
         {/* Search & Categories Bar */}
         <div className="p-3 sm:px-6 sm:py-3 border-b border-slate-200 dark:border-slate-800 space-y-3 bg-white dark:bg-slate-900 shrink-0">
-          {/* Live Search Input */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute start-3.5 top-3 pointer-events-none" />
             <input
@@ -227,7 +392,6 @@ export function AdhkarReaderModal({
             )}
           </div>
 
-          {/* Category Tabs (Hidden during global search) */}
           {!searchQuery && (
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
               {ADHKAR_CATEGORIES.map((cat) => {
@@ -251,7 +415,6 @@ export function AdhkarReaderModal({
             </div>
           )}
 
-          {/* Category Progress Bar */}
           {!searchQuery && (
             <div className="flex items-center justify-between gap-4 text-xs">
               <div className="flex items-center gap-2">
@@ -275,6 +438,12 @@ export function AdhkarReaderModal({
               </div>
             </div>
           )}
+
+          {progressSyncError && (
+            <p role="alert" className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">
+              {progressSyncError}
+            </p>
+          )}
         </div>
 
         {/* Adhkar List Content */}
@@ -293,7 +462,6 @@ export function AdhkarReaderModal({
             displayedItems.map((item, index) => {
               const currentCount = counts[item.id] || 0;
               const isCompleted = currentCount >= item.count;
-              const remaining = Math.max(0, item.count - currentCount);
 
               return (
                 <div
@@ -305,7 +473,6 @@ export function AdhkarReaderModal({
                       : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-emerald-300 dark:hover:border-emerald-700 shadow-2xs'
                   }`}
                 >
-                  {/* Top Item Badge Row */}
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <span className="w-6 h-6 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 font-black text-xs flex items-center justify-center shrink-0">
@@ -323,7 +490,6 @@ export function AdhkarReaderModal({
                       )}
                     </div>
 
-                    {/* Interactive Count Indicator Button */}
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
@@ -370,12 +536,10 @@ export function AdhkarReaderModal({
                     </div>
                   </div>
 
-                  {/* Pristine Dhikr Arabic Text with Full Tashkeel */}
                   <p className={`font-serif font-normal text-slate-900 dark:text-slate-100 text-right ${fontStyle} leading-relaxed`}>
                     {item.text}
                   </p>
 
-                  {/* Hadith Virtue & Source Documentation */}
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                     {item.virtue && (
                       <p className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">

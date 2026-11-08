@@ -54,6 +54,8 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          clientsClaim: true,
+          skipWaiting: true,
           maximumFileSizeToCacheInBytes: 30 * 1024 * 1024, // 30MB for full scripture & audio assets
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,json,txt}'],
           navigateFallback: '/index.html',

@@ -5,98 +5,114 @@ import {
   where,
   onSnapshot,
   doc,
+  updateDoc,
   setDoc,
   serverTimestamp,
-} from '../firebase.js';
-import { db, handleDatabaseError, OperationType } from '../firebase.js';
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-export function useAdminNotes(recipientUid) {
-  const { user } = useAuth();
-  const targetUid = recipientUid === undefined ? user?.uid : recipientUid;
+export function useAdminNotes(conversationUid = null) {
+  const { user, isAdmin } = useAuth();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!user || !targetUid) {
+    if (!user) {
       setNotes([]);
       setLoading(false);
       setError(null);
       return;
     }
 
-    const q = query(
-      collection(db, 'notes'),
-      where('toUid', '==', targetUid)
-    );
+    const toUid = isAdmin ? conversationUid || user.uid : user.uid;
+    if (!toUid) {
+      setNotes([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
     setLoading(true);
     setError(null);
+    const q = query(
+      collection(db, 'notes'),
+      where('toUid', '==', toUid)
+    );
+
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
         const list = [];
         snapshot.forEach((d) => list.push({ id: d.id, ...d.data() }));
-        list.sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+        list.sort(
+          (a, b) =>
+            (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0)
+        );
         setNotes(list);
-        setLoading(false);
         setError(null);
+        setLoading(false);
       },
-      (error) => {
-        setError(handleDatabaseError(error, OperationType.LIST, 'notes'));
+      (listenerError) => {
+        setError(listenerError);
+        handleFirestoreError(listenerError, OperationType.LIST, 'notes');
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [user, targetUid]);
+  }, [user?.uid, isAdmin, conversationUid]);
 
   const markAsRead = async (noteId) => {
     try {
-      await setDoc(doc(db, 'notes', noteId, 'isRead'), true);
+      const ref = doc(db, 'notes', noteId);
+      await updateDoc(ref, { isRead: true });
+      setError(null);
     } catch (err) {
-      handleDatabaseError(err, OperationType.UPDATE, `notes/${noteId}`);
+      setError(err);
+      handleFirestoreError(err, OperationType.UPDATE, `notes/${noteId}`);
+      throw err;
     }
   };
 
   const sendNote = async (toUid, text) => {
-    if (!user) throw new Error('يجب تسجيل الدخول لإرسال الرسالة');
-    const cleanText = text.trim();
-    if (!toUid || !cleanText || cleanText.length > 1000) {
-      throw new Error('الرسالة مطلوبة ويجب ألا تتجاوز 1000 حرف');
-    }
+    if (!user) throw new Error('You must be signed in to send a note.');
     try {
       const ref = doc(collection(db, 'notes'));
       await setDoc(ref, {
         toUid,
         fromUid: user.uid,
         fromName: user.displayName || 'المشرف',
-        text: cleanText,
+        text: text.trim(),
         isRead: false,
         createdAt: serverTimestamp(),
       });
+      setError(null);
     } catch (err) {
-      handleDatabaseError(err, OperationType.CREATE, 'notes');
+      handleFirestoreError(err, OperationType.CREATE, 'notes');
       throw err;
     }
   };
 
   const replyToNote = async (noteId, text) => {
-    if (!user) throw new Error('يجب تسجيل الدخول لإرسال الرد');
-    const cleanText = text.trim();
-    if (!noteId || !cleanText || cleanText.length > 1000) {
-      throw new Error('الرد مطلوب ويجب ألا يتجاوز 1000 حرف');
+    if (!user || isAdmin) throw new Error('Only the note recipient can reply.');
+    const trimmedText = text.trim();
+    if (!trimmedText || trimmedText.length > 1000) {
+      throw new Error('The reply must contain 1 to 1000 characters.');
     }
     try {
-      await setDoc(doc(db, 'notes', noteId, 'reply'), {
-        fromUid: user.uid,
-        fromName: user.displayName || 'مستخدم',
-        text: cleanText,
-        createdAt: serverTimestamp(),
+      await updateDoc(doc(db, 'notes', noteId), {
+        reply: {
+          fromUid: user.uid,
+          fromName: user.displayName || 'المستخدم',
+          text: trimmedText,
+          createdAt: serverTimestamp(),
+        },
       });
+      setError(null);
     } catch (err) {
-      handleDatabaseError(err, OperationType.CREATE, `notes/${noteId}/reply`);
+      handleFirestoreError(err, OperationType.UPDATE, `notes/${noteId}`);
       throw err;
     }
   };

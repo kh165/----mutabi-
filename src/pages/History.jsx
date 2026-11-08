@@ -9,6 +9,8 @@ import {
   BookOpen,
   Video,
   CheckCircle2,
+  Calendar,
+  Moon,
 } from 'lucide-react';
 
 export function History() {
@@ -62,7 +64,7 @@ export function History() {
           <select
             value={selectedActivityId}
             onChange={(e) => setSelectedActivityId(e.target.value)}
-            className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="all">جميع الأنشطة المسجلة</option>
             {activities.map((a) => (
@@ -82,7 +84,7 @@ export function History() {
             <button
               type="button"
               onClick={() => setFilterPeriod('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 filterPeriod === 'all'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -93,7 +95,7 @@ export function History() {
             <button
               type="button"
               onClick={() => setFilterPeriod('7days')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 filterPeriod === '7days'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -104,7 +106,7 @@ export function History() {
             <button
               type="button"
               onClick={() => setFilterPeriod('30days')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 filterPeriod === '30days'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -249,14 +251,14 @@ export function History() {
                       <button
                         type="button"
                         onClick={() => handleDelete(log.id)}
-                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold cursor-pointer"
+                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-bold"
                       >
                         نعم
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(null)}
-                        className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] cursor-pointer"
+                        className="px-2 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-[10px]"
                       >
                         إلغاء
                       </button>
@@ -265,7 +267,7 @@ export function History() {
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(log.id)}
-                      className="w-8 h-8 rounded-xl text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center justify-center transition-all cursor-pointer"
+                      className="w-8 h-8 rounded-xl text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center justify-center transition-all"
                       title="حذف هذا السجل"
                     >
                       <Trash2 className="w-4 h-4" />

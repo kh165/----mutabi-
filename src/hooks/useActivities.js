@@ -6,11 +6,11 @@ import {
   orderBy,
   doc,
   setDoc,
-  updateDoc,
+  getDocs,
   deleteDoc,
   serverTimestamp,
-} from '../firebase.js';
-import { db, handleDatabaseError, OperationType } from '../firebase.js';
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export const INITIAL_PRESETS = [
@@ -128,31 +128,63 @@ export const INITIAL_PRESETS = [
   },
 ];
 
-const presetId = (idx) => `preset_${idx + 1}`;
+// IDs ثابتة للأنشطة الافتراضية: السجلات القديمة تفضل مرتبطة بنفس النشاط بعد الحفظ في Firestore
+const presetsWithIds = () =>
+  INITIAL_PRESETS.map((p, idx) => ({ ...p, id: `preset_${idx + 1}` }));
 
-const buildPresets = () =>
-  INITIAL_PRESETS.map((p, idx) => ({ ...p, id: p.id || presetId(idx) }));
+// يكتب فقط الأنشطة الافتراضية الناقصة (لا يمسح أي تعديل للأدمن)
+let seedInFlight = null;
+async function seedMissingPresets() {
+  if (seedInFlight) return seedInFlight;
+  seedInFlight = (async () => {
+    const existing = await getDocs(collection(db, 'activities'));
+    const existingIds = new Set(existing.docs.map((d) => d.id));
+    for (const preset of presetsWithIds()) {
+      if (existingIds.has(preset.id)) continue;
+      await setDoc(doc(db, 'activities', preset.id), {
+        ...preset,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  })().finally(() => {
+    seedInFlight = null;
+  });
+  return seedInFlight;
+}
 
-const stripUndefined = (obj) =>
-  Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+function getActivitiesCacheKey(uid, fetchAll) {
+  return `mutabi_activities_cache_${uid}_${fetchAll ? 'all' : 'assigned'}`;
+}
+
+function getCachedActivities(uid, fetchAll) {
+  if (!uid) return [];
+  try {
+    const cached = localStorage.getItem(getActivitiesCacheKey(uid, fetchAll));
+    return cached ? JSON.parse(cached) : [];
+  } catch {
+    return [];
+  }
+}
 
 export function useActivities(fetchAll = false) {
-  const { user } = useAuth();
-  const dbCountRef = useRef(-1);
-  const [activities, setActivities] = useState([]);
+  const { user, isAdmin } = useAuth();
+  const [activities, setActivities] = useState(() => getCachedActivities(user?.uid, fetchAll));
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [usingPresets, setUsingPresets] = useState(false);
+  const usingPresetsRef = useRef(false);
+  const isAdminRef = useRef(isAdmin);
+  isAdminRef.current = isAdmin;
 
   useEffect(() => {
     if (!user) {
       setActivities([]);
       setLoading(false);
-      setError(null);
       return;
     }
 
+    setActivities(getCachedActivities(user.uid, fetchAll));
     setLoading(true);
-    setError(null);
     const q = query(collection(db, 'activities'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(
       q,
@@ -161,24 +193,48 @@ export function useActivities(fetchAll = false) {
         snapshot.forEach((docSnap) => {
           items.push({ id: docSnap.id, ...docSnap.data() });
         });
-        dbCountRef.current = items.length;
 
-        const filtered = fetchAll
-          ? items
-          : items.filter((a) => {
+        if (items.length === 0) {
+          usingPresetsRef.current = true;
+          setUsingPresets(true);
+          setActivities(presetsWithIds());
+          // الأدمن يكتب الأنشطة الافتراضية في Firestore تلقائيًا (مرة واحدة، من السيرفر فقط)
+          if (isAdminRef.current && !snapshot.metadata.fromCache) {
+            seedMissingPresets().catch((seedError) => {
+              console.error('Failed to seed default activities:', seedError);
+            });
+          }
+        } else {
+          usingPresetsRef.current = false;
+          setUsingPresets(false);
+          if (fetchAll) {
+            setActivities(items);
+            try {
+              localStorage.setItem(
+                getActivitiesCacheKey(user.uid, fetchAll),
+                JSON.stringify(items)
+              );
+            } catch {}
+          } else {
+            const filtered = items.filter((a) => {
               if (!a.isActive) return false;
               if (a.audience === 'all') return true;
               return a.assignedUids?.includes(user.uid);
             });
-        setActivities(filtered);
-        setError(null);
+            setActivities(filtered);
+            try {
+              localStorage.setItem(
+                getActivitiesCacheKey(user.uid, fetchAll),
+                JSON.stringify(filtered)
+              );
+            } catch {}
+          }
+        }
         setLoading(false);
       },
       (error) => {
-        console.error('Activities fetch failed:', error);
-        dbCountRef.current = -1;
-        setActivities([]);
-        setError(error);
+        console.warn('Activities fetch warning, falling back to built-in presets:', error);
+        setActivities(presetsWithIds());
         setLoading(false);
       }
     );
@@ -186,90 +242,71 @@ export function useActivities(fetchAll = false) {
     return () => unsubscribe();
   }, [user, fetchAll]);
 
-  const seedPresetsToDatabase = async () => {
-    if (dbCountRef.current > 0) return;
-    if (dbCountRef.current !== 0) {
-      throw new Error('تعذر التحقق من قائمة الأنشطة في قاعدة البيانات. أعد المحاولة بعد استعادة الاتصال.');
-    }
-    for (let i = 0; i < INITIAL_PRESETS.length; i++) {
-      const item = INITIAL_PRESETS[i];
-      const id = presetId(i);
-      await setDoc(doc(db, 'activities', id), {
-        ...item,
-        id,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-  };
-
   const saveActivity = async (data) => {
     try {
+      if (usingPresetsRef.current) {
+        await seedMissingPresets();
+      }
       if (data.id) {
-        if (String(data.id).startsWith('preset_') && dbCountRef.current === 0) {
-          await seedPresetsToDatabase();
-        }
         const ref = doc(db, 'activities', data.id);
-        await setDoc(
-          ref,
-          stripUndefined({
-            ...data,
-            createdAt: data.createdAt || serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }),
-          { merge: true }
-        );
+        await setDoc(ref, { ...data, updatedAt: serverTimestamp() }, { merge: true });
       } else {
         const ref = doc(collection(db, 'activities'));
-        await setDoc(
-          ref,
-          stripUndefined({
-            ...data,
-            id: ref.id,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          })
-        );
+        const newAct = {
+          ...data,
+          id: ref.id,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        };
+        await setDoc(ref, newAct);
       }
     } catch (err) {
-      handleDatabaseError(err, OperationType.WRITE, `activities/${data.id || 'new'}`);
+      handleFirestoreError(err, OperationType.WRITE, `activities/${data.id || 'new'}`);
       throw err;
     }
   };
 
   const deleteActivity = async (id) => {
     try {
+      if (usingPresetsRef.current) {
+        await seedMissingPresets();
+      }
       await deleteDoc(doc(db, 'activities', id));
     } catch (err) {
-      handleDatabaseError(err, OperationType.DELETE, `activities/${id}`);
+      handleFirestoreError(err, OperationType.DELETE, `activities/${id}`);
       throw err;
     }
   };
 
   const reorderActivities = async (orderedList) => {
+    setActivities(orderedList);
     try {
-      await Promise.all(
-        orderedList.flatMap((item, index) =>
-          item.order === index + 1
-            ? []
-            : [
-            updateDoc(doc(db, 'activities', item.id), {
-              order: index + 1,
-              updatedAt: serverTimestamp(),
-            }),
-          ]
-        )
-      );
+      if (usingPresetsRef.current) {
+        await seedMissingPresets();
+      }
+      for (let i = 0; i < orderedList.length; i++) {
+        const item = orderedList[i];
+        if (item.order !== i + 1) {
+          await setDoc(
+            doc(db, 'activities', item.id),
+            { order: i + 1, updatedAt: serverTimestamp() },
+            { merge: true }
+          );
+        }
+      }
     } catch (err) {
-      handleDatabaseError(err, OperationType.UPDATE, 'activities');
-      throw err;
+      handleFirestoreError(err, OperationType.WRITE, 'activities/reorder');
     }
+  };
+
+  const seedPresetsToDatabase = async () => {
+    await seedMissingPresets();
   };
 
   return {
     activities,
     loading,
-    error,
+    usingPresets,
     saveActivity,
     deleteActivity,
     reorderActivities,

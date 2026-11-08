@@ -7,16 +7,16 @@ import {
   setDoc,
   deleteDoc,
   serverTimestamp,
-} from '../firebase.js';
-import { db, handleDatabaseError, OperationType } from '../firebase.js';
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export const DEFAULT_ENCOURAGEMENTS = [
   'ما شاء الله! خطوة مباركة كُتبت في ميزان حسناتك 🌱',
-  'ثبتك الله على طاعته وزادك همّة وتوفيقاً 🌿',
+  'ثبتك الله على طاعته وزادك همّة وتوفيقاً ✨',
   'هنيئاً لك هذا الورد المبارك، داوم على الخير وإن قل 🤍',
   'طوبى لمن عمّر يومه بذكر الله وكتابه العزيز 📖',
-  'وفقك الله ونفع بك، خطوة اليوم تبني ثبات الغد 🌿',
+  'وفقك الله ونفع بك، خطوة اليوم تبني ثبات الغد 🌟',
   'تقبل الله طاعتك ورزقك الإخلاص والقبول 🤲',
 ];
 
@@ -42,7 +42,7 @@ export function useEncouragements() {
         setLoading(false);
       },
       (error) => {
-        handleDatabaseError(error, OperationType.LIST, 'encouragements');
+        handleFirestoreError(error, OperationType.LIST, 'encouragements');
         setLoading(false);
       }
     );
@@ -58,7 +58,7 @@ export function useEncouragements() {
         createdAt: serverTimestamp(),
       });
     } catch (err) {
-      handleDatabaseError(err, OperationType.CREATE, 'encouragements');
+      handleFirestoreError(err, OperationType.CREATE, 'encouragements');
       throw err;
     }
   };
@@ -67,7 +67,7 @@ export function useEncouragements() {
     try {
       await deleteDoc(doc(db, 'encouragements', id));
     } catch (err) {
-      handleDatabaseError(err, OperationType.DELETE, `encouragements/${id}`);
+      handleFirestoreError(err, OperationType.DELETE, `encouragements/${id}`);
       throw err;
     }
   };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SURAHS, TOTAL_PAGES } from '../data/quran.js';
 import { getSurahAyahs, getSurahTafseer } from '../data/quranTexts.js';
+import { getQuranDivisionByPage } from '../lib/quranDivision.js';
 import {
   BookOpen,
   Moon,
@@ -73,6 +74,10 @@ export function QuranReaderModal({
   const [surahData, setSurahData] = useState(null);
   const [tafseerMap, setTafseerMap] = useState({});
   const [loading, setLoading] = useState(false);
+  const [surahLoadError, setSurahLoadError] = useState(null);
+  const [tafseerLoading, setTafseerLoading] = useState(false);
+  const [tafseerError, setTafseerError] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const audioRef = useRef(null);
 
@@ -128,7 +133,7 @@ export function QuranReaderModal({
     } catch {}
   }, [selectedFontId]);
 
-  // Load Surah content and pre-fetch its Tafseer Al-Muyassar
+  // Load the Quran text and tafseer independently so a tafseer outage cannot block reading.
   useEffect(() => {
     if (!isOpen) {
       if (audioRef.current) {
@@ -146,6 +151,12 @@ export function QuranReaderModal({
     let isCancelled = false;
     async function fetchSurahAndTafseer() {
       setLoading(true);
+      setSurahData(null);
+      setSurahLoadError(null);
+      setTafseerMap({});
+      setTafseerLoading(true);
+      setTafseerError(null);
+      setSelectedAyahForTafseer(null);
       if (audioRef.current) {
         audioRef.current.pause();
         setAudioPlaying(false);
@@ -154,29 +165,47 @@ export function QuranReaderModal({
         singleAyahAudioRef.current.pause();
         setSingleAyahPlaying(false);
       }
-      try {
-        const [verses, tafseer] = await Promise.all([
-          getSurahAyahs(selectedSurah),
-          getSurahTafseer(selectedSurah),
-        ]);
-        if (!isCancelled) {
-          setSurahData(verses);
-          setTafseerMap(tafseer || {});
-        }
-      } catch (e) {
-        console.error('Failed to load Surah or Tafseer', e);
-      } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
+      const [versesResult, tafseerResult] = await Promise.allSettled([
+        getSurahAyahs(selectedSurah),
+        getSurahTafseer(selectedSurah),
+      ]);
+      if (isCancelled) return;
+
+      if (versesResult.status === 'fulfilled') {
+        setSurahData(versesResult.value);
+      } else {
+        console.error('Failed to load Quran verses:', versesResult.reason);
+        setSurahLoadError('تعذر تحميل آيات السورة. تحقق من اتصال الإنترنت ثم أعد المحاولة.');
       }
+      setLoading(false);
+
+      if (tafseerResult.status === 'fulfilled') {
+        setTafseerMap(tafseerResult.value);
+      } else {
+        console.error('Failed to load Quran tafseer:', tafseerResult.reason);
+        setTafseerError('تعذر تحميل التفسير الآن. يمكنك إعادة المحاولة.');
+      }
+      setTafseerLoading(false);
     }
 
     fetchSurahAndTafseer();
     return () => {
       isCancelled = true;
     };
-  }, [isOpen, selectedSurah]);
+  }, [isOpen, selectedSurah, loadAttempt]);
+
+  const retryTafseer = async () => {
+    setTafseerLoading(true);
+    setTafseerError(null);
+    try {
+      setTafseerMap(await getSurahTafseer(selectedSurah));
+    } catch (retryError) {
+      console.error('Failed to retry Quran tafseer:', retryError);
+      setTafseerError('تعذر تحميل التفسير الآن. تحقق من اتصال الإنترنت ثم أعد المحاولة.');
+    } finally {
+      setTafseerLoading(false);
+    }
+  };
 
   // Keyboard navigation
   useEffect(() => {
@@ -403,6 +432,7 @@ export function QuranReaderModal({
 
   const paddedPage = String(currentMeta.startPage).padStart(3, '0');
   const pageImageUrl = `https://files.quran.app/hafs/madani/width_1024/page${paddedPage}.png`;
+  const division = getQuranDivisionByPage(currentMeta.startPage, selectedSurah);
 
   return (
     <div
@@ -446,7 +476,7 @@ export function QuranReaderModal({
               </select>
             </div>
             <p className={`text-xs ${themes.subText} hidden sm:block`}>
-              {currentMeta.type === 'meccan' ? 'مكية' : 'مدنية'} • {currentMeta.ayahsCount} آية • الصفحة {currentMeta.startPage}
+              {currentMeta.type === 'meccan' ? 'مكية' : 'مدنية'} • {currentMeta.ayahsCount} آية • الجزء {division.juz} • الحزب {division.hizb} • {division.rubNameInHizb} (صفحة {currentMeta.startPage})
             </p>
           </div>
         </div>
@@ -655,6 +685,17 @@ export function QuranReaderModal({
                 جارٍ جلب آيات سورة {currentMeta.name} بالرسم العثماني المعتمد...
               </p>
             </div>
+          ) : surahLoadError ? (
+            <div className="py-24 text-center space-y-4">
+              <p className={`text-sm font-semibold ${themes.subText}`}>{surahLoadError}</p>
+              <button
+                type="button"
+                onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700"
+              >
+                إعادة تحميل السورة
+              </button>
+            </div>
           ) : viewMode === 'page' ? (
             /* Madinah Mushaf Page View */
             <div className="flex flex-col items-center justify-center py-4">
@@ -678,7 +719,7 @@ export function QuranReaderModal({
                   <span className="text-base font-serif opacity-40">۞</span>
                 </div>
 
-                <div className={`flex items-center justify-center gap-3 text-xs sm:text-sm font-semibold ${themes.subText}`}>
+                <div className={`flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-xs sm:text-sm font-semibold ${themes.subText}`}>
                   <span>ترتيبها: {currentMeta.number}</span>
                   <span>•</span>
                   <span>{currentMeta.type === 'meccan' ? 'مكية' : 'مدنية'}</span>
@@ -686,6 +727,10 @@ export function QuranReaderModal({
                   <span>آياتها: {currentMeta.ayahsCount}</span>
                   <span>•</span>
                   <span>الصفحة: {currentMeta.startPage}</span>
+                  <span>•</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    الجزء {division.juz} • الحزب {division.hizb} • {division.rubNameInHizb}
+                  </span>
                 </div>
 
                 {/* Basmalah (For all surahs except At-Tawbah and Al-Fatihah) */}
@@ -917,14 +962,33 @@ export function QuranReaderModal({
                 </div>
 
                 <div className="p-4 sm:p-5 rounded-2xl bg-black/5 border border-current/10">
-                  <p className="text-base sm:text-lg leading-[2.3] font-medium text-justify font-sans">
-                    {tafseerMap[selectedAyahForTafseer.number] || (
+                  {tafseerLoading ? (
+                    <p className="text-base sm:text-lg leading-[2.3] font-medium text-justify font-sans flex items-center gap-2 opacity-70">
+                      <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin inline-block" />
+                      <span>جارٍ تحميل نص التفسير المعتمد...</span>
+                    </p>
+                  ) : tafseerError ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-sans">
+                      <span className="text-rose-700 dark:text-rose-300">{tafseerError}</span>
+                      <button
+                        type="button"
+                        onClick={retryTafseer}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-bold hover:bg-emerald-700"
+                      >
+                        إعادة المحاولة
+                      </button>
+                    </div>
+                  ) : tafseerMap[selectedAyahForTafseer.number] ? (
+                    <p className="text-base sm:text-lg leading-[2.3] font-medium text-justify font-sans">
+                      {tafseerMap[selectedAyahForTafseer.number]}
+                    </p>
+                  ) : (
+                    <p className="text-base sm:text-lg leading-[2.3] font-medium text-justify font-sans">
                       <span className="flex items-center gap-2 opacity-70">
-                        <span className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin inline-block" />
-                        <span>جارٍ تحميل نص التفسير المعتمد...</span>
+                        لا يتوفر تفسير لهذه الآية في المصدر.
                       </span>
-                    )}
-                  </p>
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

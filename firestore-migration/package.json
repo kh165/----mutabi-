@@ -1,0 +1,17 @@
+{
+  "name": "mutabi-rtdb-to-firestore-migration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-time import of a Mutabi Realtime Database JSON export into Cloud Firestore.",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dry-run": "node import-rtdb-to-firestore.cjs --dry-run",
+    "import": "node import-rtdb-to-firestore.cjs --apply"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0"
+  }
+}

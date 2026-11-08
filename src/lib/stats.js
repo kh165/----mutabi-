@@ -69,7 +69,7 @@ export function calculateStreaks(logs = [], todayStr = getTodayDateString()) {
  */
 export function calculateKhatma(logs = [], readActivities = []) {
   const readActivityIds = new Set(
-    readActivities.filter((a) => a.type === 'read').map((a) => a.id)
+    readActivities.filter(a => a.type === 'read').map(a => a.id)
   );
 
   let totalPagesRead = 0;
@@ -104,7 +104,7 @@ export function calculateKhatma(logs = [], readActivities = []) {
  */
 export function getLatestMemorizedPosition(logs = []) {
   const memorizeLogs = logs
-    .filter((l) => l.details?.surah && l.details?.kind === 'new')
+    .filter(l => l.details?.surah && l.details?.kind === 'new')
     .sort((a, b) => b.date.localeCompare(a.date));
 
   if (memorizeLogs.length === 0) return null;
@@ -121,15 +121,15 @@ export function getLatestMemorizedPosition(logs = []) {
 /**
  * Calculate weekly breakdown for chart (last 7 days).
  */
-export function getWeeklyChartData(logs = [], todayStr = getTodayDateString()) {
+export function getWeeklyChartData(logs = [], todayStr) {
   const days = [];
   const arabicDays = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
 
   for (let i = 6; i >= 0; i--) {
     const d = getDateOffset(todayStr, -i);
     const dayOfWeek = new Date(`${d}T12:00:00Z`).getUTCDay();
-    const dayLogs = logs.filter((l) => l.date === d);
-    const completedCount = dayLogs.filter((l) => l.completed).length;
+    const dayLogs = logs.filter(l => l.date === d);
+    const completedCount = dayLogs.filter(l => l.completed).length;
     const totalAmount = dayLogs.reduce((acc, l) => acc + (l.amount || 0), 0);
 
     days.push({

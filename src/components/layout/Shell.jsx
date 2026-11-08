@@ -34,7 +34,13 @@ export function Shell({
 }) {
   const { user, userDoc, isAdmin, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
-  const { notes, loading: notesLoading, error: notesError, markAsRead, replyToNote } = useAdminNotes();
+  const {
+    notes,
+    loading: notesLoading,
+    error: notesError,
+    markAsRead,
+    replyToNote,
+  } = useAdminNotes();
   const [notesOpen, setNotesOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [quranOpen, setQuranOpen] = useState(false);
@@ -45,6 +51,7 @@ export function Shell({
   const navItems = [
     { id: 'today', label: 'الورد اليومي', icon: CalendarDays },
     { id: 'tasbeeh', label: 'التسبيح والأذكار', icon: CircleDot },
+    { id: 'hadith', label: 'الأربعين النووية', icon: BookOpen },
     { id: 'progress', label: 'التقدم والأوسمة', icon: TrendingUp },
     { id: 'history', label: 'سجل الإنجازات', icon: History },
     { id: 'profile', label: 'الملف الشخصي', icon: User },

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import {
+  Lock,
   Mail,
   User,
   AlertCircle,
@@ -91,7 +92,7 @@ export function AuthPage() {
         <button
           type="button"
           onClick={toggleTheme}
-          className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-2xs transition-all cursor-pointer"
+          className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-2xs transition-all"
           title="تبديل المظهر"
         >
           {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
@@ -121,7 +122,7 @@ export function AuthPage() {
                 setMode('login');
                 setLocalError(null);
               }}
-              className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              className={`py-2 text-xs font-bold rounded-xl transition-all ${
                 mode === 'login'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
@@ -135,13 +136,13 @@ export function AuthPage() {
                 setMode('register');
                 setLocalError(null);
               }}
-              className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+              className={`py-2 text-xs font-bold rounded-xl transition-all ${
                 mode === 'register'
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
               }`}
             >
-              إنشاء حساب جديد
+              إنشاء حساب جديد ✨
             </button>
           </div>
         )}
@@ -152,7 +153,7 @@ export function AuthPage() {
             type="button"
             onClick={handleGoogle}
             disabled={loading}
-            className="w-full py-3 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-3 transition-all shadow-2xs disabled:opacity-50 cursor-pointer"
+            className="w-full py-3 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-3 transition-all shadow-2xs disabled:opacity-50"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
               <path
@@ -193,14 +194,14 @@ export function AuthPage() {
                 الاسم الكريم
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute right-3.5 top-3 pointer-events-none" />
+                <User className="w-4 h-4 text-slate-400 absolute end-3.5 top-3 pointer-events-none" />
                 <input
                   type="text"
                   required
-                  placeholder="مثال: خالد صلاح"
+                  placeholder="مثال: عبد الرحمن محمد"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pr-10 pl-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-right"
+                  className="w-full pe-10 ps-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
             </div>
@@ -211,14 +212,14 @@ export function AuthPage() {
               البريد الإلكتروني
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
+              <Mail className="w-4 h-4 text-slate-400 absolute end-3.5 top-3 pointer-events-none" />
               <input
                 type="email"
                 required
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-left font-sans"
+                className="w-full pe-10 ps-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 dir="ltr"
               />
             </div>
@@ -237,7 +238,7 @@ export function AuthPage() {
                       setMode('forgot');
                       setLocalError(null);
                     }}
-                    className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                    className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline"
                   >
                     نسيت كلمة المرور؟
                   </button>
@@ -247,8 +248,7 @@ export function AuthPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3.5 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
-                  title={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  className="absolute start-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -258,7 +258,7 @@ export function AuthPage() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-left"
+                  className="w-full ps-9 pe-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   dir="ltr"
                 />
               </div>
@@ -288,7 +288,7 @@ export function AuthPage() {
                   setAccountNotFound(false);
                   setLocalError(null);
                 }}
-                className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5"
               >
                 <span>إنشاء حساب جديد بهذا البريد الآن ↗</span>
               </button>
@@ -305,7 +305,7 @@ export function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <span>
               {loading
@@ -322,7 +322,7 @@ export function AuthPage() {
             <button
               type="button"
               onClick={() => setMode('login')}
-              className="w-full text-center text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 py-2 cursor-pointer"
+              className="w-full text-center text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 py-2"
             >
               العودة لشاشة الدخول
             </button>

@@ -7,8 +7,6 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut as fbSignOut,
-  setPersistence,
-  browserLocalPersistence,
   updateProfile,
 } from 'firebase/auth';
 import {
@@ -24,6 +22,7 @@ import {
   enqueueOfflineAction,
   removeOfflineAction,
 } from '../lib/offlineSync.js';
+import { settleOrTimeout, withTimeout } from '../lib/async.js';
 
 const AuthContext = createContext(undefined);
 
@@ -36,6 +35,22 @@ const ROOT_ADMIN_EMAILS = [
 const isRootAdminEmail = (email) =>
   Boolean(email) &&
   ROOT_ADMIN_EMAILS.includes(String(email).trim().toLowerCase());
+
+const adminCacheKey = (uid) => `mutabi_is_admin_${uid}`;
+
+function readAdminCache(uid) {
+  try {
+    return localStorage.getItem(adminCacheKey(uid)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeAdminCache(uid, value) {
+  try {
+    localStorage.setItem(adminCacheKey(uid), value ? '1' : '0');
+  } catch {}
+}
 
 function getCachedAuth() {
   try {
@@ -51,18 +66,39 @@ function getCachedAuth() {
   return { user: null, userDoc: null };
 }
 
+function isOfflineLikeError(err) {
+  const msg = err?.message || '';
+  return (
+    !navigator.onLine ||
+    err?.code === 'timeout' ||
+    err?.code === 'unavailable' ||
+    err?.code === 'deadline-exceeded' ||
+    err?.code === 'failed-precondition' ||
+    msg.includes('offline') ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('network-request-failed') ||
+    msg.includes('IndexedDB') ||
+    msg.includes('indexedDB')
+  );
+}
+
 export function AuthProvider({ children }) {
   const cached = getCachedAuth();
   const [user, setUser] = useState(cached.user);
   const [userDoc, setUserDoc] = useState(cached.userDoc);
   const [isAdmin, setIsAdmin] = useState(() => {
-    return isRootAdminEmail(cached.user?.email);
+    return (
+      isRootAdminEmail(cached.user?.email) ||
+      (cached.user?.uid ? readAdminCache(cached.user.uid) : false)
+    );
   });
-  const [loading, setLoading] = useState(true);
+  // لو عندنا مستخدم محفوظ نفتح التطبيق فوراً بدون انتظار Firebase
+  const [loading, setLoading] = useState(!cached.user);
   const [error, setError] = useState(null);
   const [profileSyncError, setProfileSyncError] = useState(null);
   const pendingNameRef = useRef(null);
   const userDocUnsubRef = useRef(null);
+  const activeUidRef = useRef(cached.user?.uid || null);
 
   const stopUserDocListener = () => {
     if (userDocUnsubRef.current) {
@@ -71,7 +107,6 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // مزامنة حيّة لملف المستخدم: أي تغيير في Firestore يظهر في الموقع فورًا
   const startUserDocListener = (uid) => {
     stopUserDocListener();
     userDocUnsubRef.current = onSnapshot(
@@ -93,23 +128,46 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     let unsubscribe;
+    let resolved = false;
 
-    // جلب/إنشاء ملف المستخدم في الخلفية بدون تعليق الواجهة
+    const fallbackUserDoc = (u) => ({
+      displayName: u.displayName || u.email?.split('@')[0] || 'مستخدم',
+      email: u.email || '',
+      photoURL: u.photoURL || null,
+      timezone: 'Africa/Cairo',
+      theme: 'light',
+      isDisabled: false,
+      uid: u.uid,
+    });
+
     const loadProfile = async (currentUser, rootAdmin) => {
-      const stillCurrent = () => !cancelled && auth.currentUser?.uid === currentUser.uid;
+      const stillCurrent = () => !cancelled && activeUidRef.current === currentUser.uid;
+
+      // الاستماع الحي يبدأ فوراً: يقرأ من الكاش المحلي حتى بدون نت
+      if (stillCurrent()) startUserDocListener(currentUser.uid);
+
+      // أوفلاين: لا نحاول أي قراءة من الشبكة
+      if (!navigator.onLine) return;
+
       try {
         const userRef = doc(db, 'users', currentUser.uid);
         const adminRef = doc(db, 'admins', currentUser.uid);
 
         try {
-          const adminSnap = await getDoc(adminRef);
-          if (stillCurrent()) setIsAdmin(rootAdmin || adminSnap.exists());
+          const adminSnap = await withTimeout(getDoc(adminRef), 6000);
+          const adminValue = rootAdmin || adminSnap.exists();
+          writeAdminCache(currentUser.uid, adminValue);
+          if (stillCurrent()) setIsAdmin(adminValue);
         } catch (adminError) {
-          console.error('Failed to check the administrator profile:', adminError);
-          if (stillCurrent()) setIsAdmin(rootAdmin);
+          if (stillCurrent()) {
+            setIsAdmin(rootAdmin || readAdminCache(currentUser.uid));
+          }
+          if (!isOfflineLikeError(adminError)) {
+            console.error('Failed to check the administrator profile:', adminError);
+          }
         }
 
-        const userSnap = await getDoc(userRef);
+        const userSnap = await withTimeout(getDoc(userRef), 8000);
         if (!stillCurrent()) return;
         if (!userSnap.exists()) {
           const newDoc = {
@@ -132,100 +190,92 @@ export function AuthProvider({ children }) {
         } else {
           const data = userSnap.data();
           setUserDoc({ ...data, uid: currentUser.uid });
-          updateDoc(userRef, { lastActiveAt: serverTimestamp() }).catch((updateError) => {
-            console.warn('Could not update the last-active timestamp:', updateError);
-          });
+          updateDoc(userRef, { lastActiveAt: serverTimestamp() }).catch(() => {});
         }
       } catch (err) {
         console.warn('Initial profile fetch warning:', err);
         if (!stillCurrent()) return;
-        const isOfflineError =
-          !navigator.onLine ||
-          err?.code === 'unavailable' ||
-          err?.code === 'deadline-exceeded' ||
-          err?.message?.includes('client is offline') ||
-          err?.message?.includes('offline') ||
-          err?.message?.includes('Failed to fetch') ||
-          err?.message?.includes('network-request-failed');
-        if (!isOfflineError) setProfileSyncError(err);
-        let cachedDoc = null;
-        try {
-          const raw = localStorage.getItem('mutabi_auth_userdoc');
-          if (raw) cachedDoc = JSON.parse(raw);
-        } catch {}
-
-        setUserDoc((prev) => prev || cachedDoc || {
-          displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'مستخدم',
-          email: currentUser.email || '',
-          photoURL: currentUser.photoURL || null,
-          timezone: 'Africa/Cairo',
-          theme: 'light',
-          isDisabled: false,
-          uid: currentUser.uid,
-        });
-        if (!isOfflineError) {
+        setUserDoc((prev) => prev || fallbackUserDoc(currentUser));
+        // نعرض شاشة الخطأ فقط لو القواعد رفضت فعلاً، مش لأي مشكلة اتصال
+        if (err?.code === 'permission-denied') {
+          setProfileSyncError(err);
           handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}`);
         }
       }
-
-      // نبدأ المزامنة الحيّة حتى لو فشل الجلب الأولي (مثلاً أوفلاين)
-      if (stillCurrent()) startUserDocListener(currentUser.uid);
     };
 
-    const initializeAuthState = async () => {
+    const applySession = (currentUser, isRealFirebaseUser) => {
+      resolved = true;
+      activeUidRef.current = currentUser.uid;
+      setUser(currentUser);
+      setProfileSyncError(null);
+
+      const rootAdmin = isRootAdminEmail(currentUser.email);
+      setIsAdmin(rootAdmin || readAdminCache(currentUser.uid));
+
       try {
-        await setPersistence(auth, browserLocalPersistence);
-      } catch (persistenceError) {
-        console.error('Could not confirm persistent Firebase authentication:', persistenceError);
+        localStorage.setItem(
+          'mutabi_auth_user',
+          JSON.stringify({
+            uid: currentUser.uid,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: currentUser.photoURL,
+          })
+        );
+      } catch {}
+
+      const initialCached = getCachedAuth().userDoc;
+      setUserDoc(
+        (prev) =>
+          prev ||
+          (initialCached?.uid === currentUser.uid ? initialCached : null) ||
+          fallbackUserDoc(currentUser)
+      );
+      setLoading(false);
+      void loadProfile(currentUser, rootAdmin);
+    };
+
+    // شبكة أمان: لو Firebase Auth اتأخر (مشكلة معروفة في iOS) نستخدم الجلسة المحفوظة
+    const safetyTimer = setTimeout(() => {
+      if (resolved || cancelled) return;
+      const cachedUser = getCachedAuth().user;
+      if (cachedUser) {
+        applySession(cachedUser, false);
+      } else {
+        setLoading(false);
+      }
+    }, 3500);
+
+    unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (cancelled) return;
+      clearTimeout(safetyTimer);
+      stopUserDocListener();
+
+      if (currentUser) {
+        applySession(currentUser, true);
+        return;
       }
 
-      if (cancelled) return;
-      unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-        stopUserDocListener();
-        setUser(currentUser);
-        if (currentUser) {
-          setProfileSyncError(null);
-          const rootAdmin = isRootAdminEmail(currentUser.email);
-          setIsAdmin(rootAdmin);
-          try {
-            localStorage.setItem('mutabi_auth_user', JSON.stringify({
-              uid: currentUser.uid,
-              email: currentUser.email,
-              displayName: currentUser.displayName,
-              photoURL: currentUser.photoURL,
-            }));
-          } catch {}
+      // Firebase رجّع null: لو أوفلاين ومعانا جلسة محفوظة نكمل بها بدل تسجيل الخروج
+      const cachedUser = getCachedAuth().user;
+      if (cachedUser && !navigator.onLine) {
+        applySession(cachedUser, false);
+        return;
+      }
 
-          let initialCached = null;
-          try {
-            const raw = localStorage.getItem('mutabi_auth_userdoc');
-            if (raw) initialCached = JSON.parse(raw);
-          } catch {}
+      resolved = true;
+      activeUidRef.current = null;
+      setUser(null);
+      setUserDoc(null);
+      setIsAdmin(false);
+      setProfileSyncError(null);
+      setLoading(false);
+    });
 
-          // الواجهة تفتح فورًا بدون انتظار الشبكة
-          setUserDoc((prev) => prev || initialCached || {
-            displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'مستخدم',
-            email: currentUser.email || '',
-            photoURL: currentUser.photoURL || null,
-            timezone: 'Africa/Cairo',
-            theme: 'light',
-            isDisabled: false,
-            uid: currentUser.uid,
-          });
-          setLoading(false);
-          void loadProfile(currentUser, rootAdmin);
-        } else {
-          setUserDoc(null);
-          setIsAdmin(false);
-          setProfileSyncError(null);
-          setLoading(false);
-        }
-      });
-    };
-
-    void initializeAuthState();
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimer);
       stopUserDocListener();
       unsubscribe?.();
     };
@@ -263,6 +313,8 @@ export function AuthProvider({ children }) {
         err.code === 'auth/invalid-credential'
       ) {
         setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      } else if (err.code === 'auth/network-request-failed') {
+        setError('لا يوجد اتصال بالإنترنت. تسجيل الدخول لأول مرة يحتاج إنترنت.');
       } else {
         setError('تعذر تسجيل الدخول، يرجى التحقق من البيانات المدخلة');
       }
@@ -320,6 +372,7 @@ export function AuthProvider({ children }) {
 
   const updateUserDoc = async (fields) => {
     if (!user) return;
+    const previousUserDoc = userDoc;
     const applyLocalUpdate = () => {
       setUserDoc((prev) => {
         const updated = { ...(prev || {}), ...fields, uid: user.uid };
@@ -332,8 +385,10 @@ export function AuthProvider({ children }) {
       });
     };
 
+    // التحديث المحلي فوري دائماً
+    applyLocalUpdate();
+
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      applyLocalUpdate();
       enqueueOfflineAction({
         type: 'UPDATE_USER',
         key: `USER_${user.uid}`,
@@ -345,18 +400,42 @@ export function AuthProvider({ children }) {
 
     try {
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(
-        userRef,
-        {
-          ...fields,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
+      const result = await settleOrTimeout(
+        setDoc(userRef, { ...fields, updatedAt: serverTimestamp() }, { merge: true }),
+        5000
       );
-      applyLocalUpdate();
-      removeOfflineAction(`USER_${user.uid}`);
+      if (result === 'pending') {
+        // الشبكة معلّقة: Firestore حافظها محلياً، ونحط نسخة احتياطية في الطابور
+        enqueueOfflineAction({
+          type: 'UPDATE_USER',
+          key: `USER_${user.uid}`,
+          uid: user.uid,
+          fields,
+        });
+      } else {
+        removeOfflineAction(`USER_${user.uid}`);
+      }
     } catch (err) {
       console.error('Failed to sync the user profile to Firestore:', err);
+      if (isOfflineLikeError(err)) {
+        enqueueOfflineAction({
+          type: 'UPDATE_USER',
+          key: `USER_${user.uid}`,
+          uid: user.uid,
+          fields,
+        });
+        return;
+      }
+      setUserDoc(previousUserDoc);
+      try {
+        if (previousUserDoc) {
+          localStorage.setItem('mutabi_auth_userdoc', JSON.stringify(previousUserDoc));
+        } else {
+          localStorage.removeItem('mutabi_auth_userdoc');
+        }
+      } catch (cacheError) {
+        console.warn('Could not restore the previous cached profile:', cacheError);
+      }
       throw err;
     }
   };
@@ -367,7 +446,12 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('mutabi_auth_user');
       localStorage.removeItem('mutabi_auth_userdoc');
     } catch {}
-    await fbSignOut(auth);
+    activeUidRef.current = null;
+    try {
+      await fbSignOut(auth);
+    } catch (e) {
+      console.warn('Sign out warning:', e);
+    }
     setUser(null);
     setUserDoc(null);
     setIsAdmin(false);

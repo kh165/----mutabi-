@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { TOTAL_PAGES } from '../../data/quran.js';
-import { BookOpen, Check, AlertCircle, RotateCcw, Moon, Sparkles } from 'lucide-react';
+import { BookOpen, Check, AlertCircle, RotateCcw, Moon } from 'lucide-react';
 import { QuranReaderModal } from '../QuranReaderModal.jsx';
 
 export function ReadInput({
@@ -98,8 +98,8 @@ export function ReadInput({
         onLogPagesRead={(surah) => {
           setEntryMode('range');
           setFromPage(surah.startPage);
-          setToPage(surah.startPage + 1);
-          setNote(`قراءة سورة ${surah.name}`);
+          setToPage(surah.startPage);
+          setNote(`قراءة الصفحة ${surah.startPage} من سورة ${surah.name}`);
         }}
       />
 

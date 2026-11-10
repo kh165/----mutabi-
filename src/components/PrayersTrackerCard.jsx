@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   Clock,
   MessageSquare,
-  Sparkles,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
@@ -142,7 +141,7 @@ export function PrayersTrackerCard({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
         <div>
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold mb-1.5 border border-emerald-200 dark:border-emerald-800">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>عمود الدين وميزان اليوم</span>
           </div>
           <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">

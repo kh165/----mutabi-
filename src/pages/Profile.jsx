@@ -10,6 +10,7 @@ import {
   NOTIFICATION_DEFAULT_SETTINGS,
   requestNotificationPermission,
   sendLocalNotification,
+  playNotificationTone,
 } from '../lib/notifications.js';
 import {
   User,
@@ -25,6 +26,7 @@ import {
   Moon,
   Bell,
   BellRing,
+  Volume2,
 } from 'lucide-react';
 import { Logo } from '../components/layout/Logo.jsx';
 
@@ -71,6 +73,7 @@ export function Profile() {
   };
 
   const handleTestNotification = () => {
+    playNotificationTone();
     const success = sendLocalNotification(
       'تنبيه تجريبي من منصة مُتَابِـع 🔔',
       'الصلاة خير من النوم، موعد صلاتك ووردك اليومي جاهز.'
@@ -272,18 +275,29 @@ export function Profile() {
 
           {notifications.enabled && (
             <div className="space-y-3 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-700">
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                   ضبط مواعيد التنبيهات اليومية:
                 </span>
-                <button
-                  type="button"
-                  onClick={handleTestNotification}
-                  className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
-                >
-                  <BellRing className="w-3.5 h-3.5" />
-                  <span>إرسال إشعار تجريبي الآن 🔔</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => playNotificationTone()}
+                    className="text-[11px] bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 font-bold px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 flex items-center gap-1 cursor-pointer transition-colors"
+                    title="استماع لصوت التنبيه الموحد"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>سماع النغمة 🔊</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTestNotification}
+                    className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <BellRing className="w-3.5 h-3.5" />
+                    <span>إرسال إشعار تجريبي 🔔</span>
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">

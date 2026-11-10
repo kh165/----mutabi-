@@ -86,20 +86,21 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex items-center justify-center p-4 relative transition-colors duration-200">
+    <div className="relative flex min-h-screen min-h-[100svh] items-start justify-center overflow-y-auto bg-slate-50 px-3 py-16 text-slate-800 transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100 sm:items-center sm:p-6">
       {/* Top corner theme toggle */}
-      <div className="absolute top-4 left-4">
+      <div className="absolute end-3 top-3 z-10 sm:end-4 sm:top-4">
         <button
           type="button"
           onClick={toggleTheme}
-          className="w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-2xs transition-all"
+          className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-2xs transition-all dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
           title="تبديل المظهر"
+          aria-label="تبديل المظهر"
         >
           {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
         </button>
       </div>
 
-      <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 text-right">
+      <div className="my-0 w-full max-w-md space-y-5 rounded-3xl border border-slate-200 bg-white p-4 text-right shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:my-auto sm:space-y-6 sm:p-8">
         {/* Logo and Greeting */}
         <div className="text-center space-y-3">
           <div className="flex justify-center">
@@ -142,7 +143,7 @@ export function AuthPage() {
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'
               }`}
             >
-              إنشاء حساب جديد ✨
+              إنشاء حساب جديد
             </button>
           </div>
         )}
@@ -153,7 +154,7 @@ export function AuthPage() {
             type="button"
             onClick={handleGoogle}
             disabled={loading}
-            className="w-full py-3 px-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 rounded-2xl text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-3 transition-all shadow-2xs disabled:opacity-50"
+            className="flex min-h-11 w-full items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 shadow-2xs transition-all hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/60"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
               <path
@@ -194,14 +195,14 @@ export function AuthPage() {
                 الاسم الكريم
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute end-3.5 top-3 pointer-events-none" />
+                <User className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
                   required
-                  placeholder="مثال: عبد الرحمن محمد"
+                  placeholder="مثال: خالد صلاح"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full pe-10 ps-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pe-3.5 ps-10 text-base font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 sm:text-sm"
                 />
               </div>
             </div>
@@ -212,14 +213,14 @@ export function AuthPage() {
               البريد الإلكتروني
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute end-3.5 top-3 pointer-events-none" />
+              <Mail className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 type="email"
                 required
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pe-10 ps-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pe-10 ps-3.5 text-base font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 sm:text-sm"
                 dir="ltr"
               />
             </div>
@@ -248,7 +249,8 @@ export function AuthPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute start-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  className="absolute start-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -258,7 +260,7 @@ export function AuthPage() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full ps-9 pe-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="min-h-11 w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 ps-3.5 pe-12 text-base font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100 sm:text-sm"
                   dir="ltr"
                 />
               </div>
@@ -305,7 +307,7 @@ export function AuthPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl text-xs shadow-md shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3 text-xs font-bold leading-relaxed text-white shadow-md shadow-emerald-600/25 transition-all hover:bg-emerald-700 disabled:opacity-50"
           >
             <span>
               {loading

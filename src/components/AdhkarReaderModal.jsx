@@ -12,7 +12,7 @@ import {
   Shield,
   Heart,
   Clock,
-  Sparkles,
+  BookOpenCheck,
   Compass,
   ZoomIn,
   ZoomOut,
@@ -333,7 +333,7 @@ export function AdhkarReaderModal({
       case 'after-prayer': return <Compass className="w-4 h-4 text-emerald-500" />;
       case 'sleep': return <Moon className="w-4 h-4 text-sky-400" />;
       case 'relief': return <Heart className="w-4 h-4 text-rose-500" />;
-      case 'prophetic': return <Sparkles className="w-4 h-4 text-amber-400" />;
+      case 'prophetic': return <BookOpenCheck className="w-4 h-4 text-amber-400" />;
       case 'ruqyah': return <Shield className="w-4 h-4 text-teal-500" />;
       default: return <Clock className="w-4 h-4 text-purple-400" />;
     }
@@ -352,7 +352,7 @@ export function AdhkarReaderModal({
         <header className="px-4 sm:px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-              <Sparkles className="w-5 h-5" />
+              <BookOpenCheck className="w-5 h-5" />
             </div>
             <div className="min-w-0">
               <h3 className="font-black text-base sm:text-lg text-slate-900 dark:text-white truncate">
@@ -572,7 +572,7 @@ export function AdhkarReaderModal({
                   <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                     {item.virtue && (
                       <p className="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                        <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                         <span>{item.virtue}</span>
                       </p>
                     )}

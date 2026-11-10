@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { lazy, Suspense, useRef, useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import { useAdminNotes } from '../../hooks/useAdminNotes.js';
@@ -23,14 +23,23 @@ import {
 } from 'lucide-react';
 import { formatArabicDate, getTodayDateString } from '../../lib/dates.js';
 import { Logo } from './Logo.jsx';
-import { QuranReaderModal } from '../QuranReaderModal.jsx';
 import { MessageThreadCard } from '../MessageThreadCard.jsx';
+import { SyncStatusBadge } from '../SyncStatusBadge.jsx';
+
+const QuranReaderModal = lazy(() =>
+  import('../QuranReaderModal.jsx').then((module) => ({ default: module.QuranReaderModal })),
+);
+const OfflineDownloadModal = lazy(() =>
+  import('../OfflineDownloadModal.jsx').then((module) => ({ default: module.OfflineDownloadModal })),
+);
 
 export function Shell({
   currentTab,
   onSelectTab,
   currentStreak = 0,
   totalPoints = 0,
+  showOfflineSetup = false,
+  onOfflineSetupDismiss,
   children,
 }) {
   const { user, userDoc, isAdmin, logout } = useAuth();
@@ -45,15 +54,52 @@ export function Shell({
   const [notesOpen, setNotesOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [quranOpen, setQuranOpen] = useState(false);
+  const [offlineOpen, setOfflineOpen] = useState(false);
+  const [notesReadError, setNotesReadError] = useState(null);
+  const readAttemptsRef = useRef(new Set());
+
+  React.useEffect(() => {
+    if (showOfflineSetup) setOfflineOpen(true);
+  }, [showOfflineSetup]);
+
+  const closeOfflineModal = () => {
+    setOfflineOpen(false);
+    onOfflineSetupDismiss?.();
+  };
 
   const unreadNotes = notes.filter((n) => !n.isRead);
   const todayStr = getTodayDateString(userDoc?.timezone);
+
+  const handleMarkAsRead = async (noteId) => {
+    try {
+      await markAsRead(noteId);
+      setNotesReadError(null);
+    } catch (error) {
+      console.error('Could not mark the message as read:', error);
+      setNotesReadError('تعذر تحديث حالة الرسالة. تحقق من الاتصال أو الصلاحيات ثم أعد المحاولة.');
+    }
+  };
+
+  React.useEffect(() => {
+    if (!notesOpen) {
+      readAttemptsRef.current.clear();
+      setNotesReadError(null);
+      return;
+    }
+    if (notesLoading || notesError) return;
+
+    unreadNotes.forEach((note) => {
+      if (readAttemptsRef.current.has(note.id)) return;
+      readAttemptsRef.current.add(note.id);
+      void handleMarkAsRead(note.id);
+    });
+  }, [notesOpen, notesLoading, notesError, unreadNotes, markAsRead]);
 
   const navItems = [
     { id: 'today', label: 'الورد اليومي', icon: CalendarDays },
     { id: 'todos', label: 'قائمة المهام', icon: CheckSquare },
     { id: 'tasbeeh', label: 'التسبيح والأذكار', icon: CircleDot },
-    { id: 'hadith', label: 'الأربعين النووية', icon: BookOpen },
+    { id: 'hadith', label: 'الأحاديث النبوية', icon: BookOpen },
     { id: 'progress', label: 'التقدم والأوسمة', icon: TrendingUp },
     { id: 'history', label: 'سجل الإنجازات', icon: History },
     { id: 'profile', label: 'الملف الشخصي', icon: User },
@@ -66,14 +112,14 @@ export function Shell({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-3 sm:px-6 py-2.5 sm:py-3 shadow-2xs">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 sm:gap-4">
+      <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2.5 sm:px-6 py-2 sm:py-3 shadow-2xs max-w-full overflow-hidden">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4">
           {/* Logo & Brand */}
           <div
             onClick={() => onSelectTab('today')}
-            className="flex items-center gap-2.5 sm:gap-3 cursor-pointer select-none shrink-0"
+            className="flex items-center gap-1.5 sm:gap-3 cursor-pointer select-none shrink-0"
           >
-            <Logo className="h-8 sm:h-9" />
+            <Logo className="h-7 sm:h-9" />
             <div className="hidden sm:block">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] sm:text-xs text-emerald-800 dark:text-emerald-300 font-bold bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
@@ -87,38 +133,41 @@ export function Shell({
           </div>
 
           {/* Center: Streak Badge & Points Badge */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <div
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-2xl font-bold text-xs sm:text-sm border transition-all ${
+              className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm border transition-all ${
                 currentStreak > 0
                   ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 shadow-2xs'
                   : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
               }`}
               title="سلسلة الاستمرار المتواصل"
             >
-              <Flame className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${currentStreak > 0 ? 'fill-amber-500 text-amber-500' : 'text-slate-400'}`} />
-              <span>{currentStreak} {currentStreak === 1 ? 'يوم' : 'أيام'}</span>
+              <Flame className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${currentStreak > 0 ? 'fill-amber-500 text-amber-500' : 'text-slate-400'}`} />
+              <span>{currentStreak}</span>
+              <span className="hidden sm:inline">{currentStreak === 1 ? 'يوم' : 'أيام'}</span>
             </div>
 
             <button
               type="button"
               onClick={() => onSelectTab('progress')}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-2xl font-bold text-xs sm:text-sm border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 shadow-2xs cursor-pointer hover:scale-105 transition-all"
+              className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 shadow-2xs cursor-pointer hover:scale-105 transition-all"
               title="رصيد نقاط العبادة - اضغط للانتقال إلى واجهة الميداليات"
             >
-              <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{totalPoints} <span className="text-[10px] sm:text-xs font-semibold">نقطة</span></span>
+              <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span>{totalPoints}</span>
+              <span className="hidden sm:inline text-[10px] sm:text-xs font-semibold">نقطة</span>
             </button>
           </div>
 
-          {/* Right Tools: PWA Install, Theme Toggle, Notifications & User Avatar */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5">
+          {/* Right Tools: Quran Reader, Theme Toggle, Notifications & User Avatar */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Quran Reader with Night Mode */}
             <button
               type="button"
               onClick={() => setQuranOpen(true)}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 flex items-center justify-center text-emerald-700 dark:text-emerald-300 transition-all border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 flex items-center justify-center text-emerald-700 dark:text-emerald-300 transition-all border border-emerald-200 dark:border-emerald-800 cursor-pointer shrink-0"
               title="المصحف الشريف - القراءة والوضع الليلي المريح"
+              aria-label="المصحف الشريف"
             >
               <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 dark:text-emerald-400" />
             </button>
@@ -127,7 +176,7 @@ export function Shell({
             <button
               type="button"
               onClick={toggleTheme}
-              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer shrink-0"
               title={isDark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
               aria-label="تبديل المظهر"
             >
@@ -139,11 +188,11 @@ export function Shell({
             </button>
 
             {/* Notifications / Notes dropdown */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setNotesOpen(!notesOpen)}
-                className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 relative transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 relative transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
                 title="رسائل المشرف"
                 aria-label="فتح رسائل المشرف"
                 aria-expanded={notesOpen}
@@ -158,13 +207,13 @@ export function Shell({
             </div>
 
             {/* User Avatar & Dropdown */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-1.5 sm:gap-2 p-1 sm:pe-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
+                className="flex items-center gap-1 sm:gap-2 p-0.5 sm:p-1 sm:pe-2.5 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
               >
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                   {userDoc?.photoURL ? (
                     <img src={userDoc.photoURL} alt={userDoc.displayName} className="w-full h-full object-cover" />
                   ) : (
@@ -228,6 +277,10 @@ export function Shell({
         </div>
       </header>
 
+      <div className="mx-auto flex w-full max-w-7xl justify-end px-3 pt-2 sm:px-6">
+        <SyncStatusBadge onOpenOfflineModal={() => setOfflineOpen(true)} />
+      </div>
+
       {notesOpen && (
         <>
           <button
@@ -269,6 +322,11 @@ export function Shell({
                   تعذر تحميل الرسائل. حاول إعادة فتح اللوحة.
                 </p>
               )}
+              {notesReadError && (
+                <p role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">
+                  {notesReadError}
+                </p>
+              )}
               {!notesLoading && !notesError && notes.length === 0 && (
                 <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center dark:border-slate-700 dark:bg-slate-900">
                   <MessageCircle className="mx-auto h-9 w-9 text-emerald-500" />
@@ -284,7 +342,7 @@ export function Shell({
                   {!note.isRead && (
                     <button
                       type="button"
-                      onClick={() => markAsRead(note.id)}
+                      onClick={() => void handleMarkAsRead(note.id)}
                       className="ms-2 inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-800 dark:text-emerald-400"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" />
@@ -334,17 +392,20 @@ export function Shell({
         </aside>
 
         {/* Page Main Content Area */}
-        <main className="flex-1 min-w-0 pb-20 md:pb-6">
+        <main className="flex-1 min-w-0 pb-28 sm:pb-24 md:pb-6">
           {children}
         </main>
       </div>
 
-      <footer dir="ltr" className="w-full px-4 pb-24 pt-2 text-center text-xs text-slate-400 dark:text-slate-500 md:pb-5">
+      <footer dir="ltr" className="w-full px-4 pb-28 pt-2 text-center text-xs text-slate-400 dark:text-slate-500 md:pb-5">
         khalid salah — All rights reserved | 2026 ©
       </footer>
 
       {/* Mobile Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 z-40 px-2 py-1.5 flex items-center justify-between overflow-x-auto scrollbar-none shadow-lg gap-0.5">
+      <nav
+        aria-label="التنقل الرئيسي"
+        className="safe-area-bottom md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 z-40 px-2 pt-1.5 flex items-center justify-start overflow-x-auto scrollbar-none shadow-lg gap-1 scroll-smooth"
+      >
         {navItems.map((item) => {
           const active = currentTab === item.id || (item.id === 'admin' && currentTab.startsWith('admin'));
           const Icon = item.icon;
@@ -352,25 +413,34 @@ export function Shell({
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-2xl transition-all cursor-pointer shrink-0 ${
+              className={`flex flex-col items-center justify-center min-w-[62px] sm:min-w-[70px] min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer shrink-0 ${
                 active
-                  ? 'text-emerald-700 dark:text-emerald-400 font-bold scale-105'
-                  : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-xs font-medium'
+                  ? 'text-emerald-700 dark:text-emerald-400 font-bold scale-105 bg-emerald-50/70 dark:bg-emerald-950/40'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-xs font-medium'
               }`}
             >
-              <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="text-[10px] sm:text-[11px] whitespace-nowrap">{item.label}</span>
+              <Icon className="w-5 h-5 shrink-0" />
+              <span className="text-[10px] leading-tight whitespace-nowrap mt-0.5">{item.label}</span>
             </button>
           );
         })}
       </nav>
 
       {/* Quran Reader Modal */}
-      <QuranReaderModal
-        isOpen={quranOpen}
-        onClose={() => setQuranOpen(false)}
-        initialSurahNumber={1}
-      />
+      {quranOpen && (
+        <Suspense fallback={null}>
+          <QuranReaderModal
+            isOpen
+            onClose={() => setQuranOpen(false)}
+            initialSurahNumber={1}
+          />
+        </Suspense>
+      )}
+      {offlineOpen && (
+        <Suspense fallback={null}>
+          <OfflineDownloadModal isOpen onClose={closeOfflineModal} />
+        </Suspense>
+      )}
     </div>
   );
 }

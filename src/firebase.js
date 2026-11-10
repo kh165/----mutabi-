@@ -1,5 +1,12 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import {
+  getAuth,
+  initializeAuth,
+  indexedDBLocalPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  browserPopupRedirectResolver,
+} from 'firebase/auth';
 import {
   doc,
   getDoc,
@@ -23,8 +30,6 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 export const app = initializeApp(firebaseConfig);
 
-// Firestore مع كاش دائم + تحديد قاعدة البيانات صراحةً من ملف الإعدادات
-// (لو قاعدة البيانات في الكونسول لها اسم غير (default) لازم يتحط في firestoreDatabaseId)
 export const db = initializeFirestore(
   app,
   {
@@ -35,7 +40,24 @@ export const db = initializeFirestore(
   firebaseConfig.firestoreDatabaseId || '(default)'
 );
 
-export const auth = getAuth(app);
+// نحدد الـ persistence من البداية (IndexedDB ثم localStorage ثم session)
+// بدل setPersistence المتأخرة اللي كانت ممكن تعلّق على iOS
+function createAuth() {
+  try {
+    return initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+      ],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+  } catch {
+    return getAuth(app); // مهيّأ بالفعل (مثلاً أثناء HMR)
+  }
+}
+
+export const auth = createAuth();
 
 export {
   doc,
@@ -58,6 +80,7 @@ export function isDatabasePermissionError(err) {
   if (!err) return false;
   const msg = err.message || String(err);
   return (
+    err.code === 'permission-denied' ||
     msg.includes('permission-denied') ||
     msg.includes('Missing or insufficient permissions') ||
     msg.includes('PERMISSION_DENIED')
@@ -79,13 +102,6 @@ export function handleFirestoreError(error, operationType, path) {
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || [],
     },
     operationType,
     path,
@@ -102,4 +118,4 @@ export function testConnection() {
   }, 1000);
 }
 
-testConnection();
+if (typeof navigator !== 'undefined' && navigator.onLine) testConnection();

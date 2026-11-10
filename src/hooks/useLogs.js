@@ -17,6 +17,7 @@ import {
   syncPendingOfflineData,
   getOfflineQueue,
 } from '../lib/offlineSync.js';
+import { settleOrTimeout } from '../lib/async.js';
 
 function getLocalLogsCache(uid) {
   if (!uid) return [];
@@ -152,7 +153,7 @@ export function useLogs(targetUid) {
         return updated;
       });
 
-      // 2) الكتابة في Firestore أو الوضع في الطابور لو أوفلاين
+      // 2) أوفلاين صريح: نحط العملية في الطابور ونخلص فوراً
       if (!navigator.onLine) {
         enqueueOfflineAction({
           type: 'SAVE_LOG',
@@ -163,18 +164,33 @@ export function useLogs(targetUid) {
         return logData;
       }
 
+      // 3) أونلاين (أو "متصل" بدون إنترنت فعلي): لا ننتظر السيرفر أكتر من 4 ثواني
       try {
         const ref = doc(db, 'logs', logId);
-        await setDoc(
-          ref,
-          {
-            ...logData,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
+        const result = await settleOrTimeout(
+          setDoc(
+            ref,
+            {
+              ...logData,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          ),
+          4000
         );
-        removeOfflineAction(`LOG_${logId}`);
+
+        if (result === 'pending') {
+          // الكتابة محفوظة محلياً في Firestore وهتترفع لوحدها، ونسخة احتياطية في الطابور
+          enqueueOfflineAction({
+            type: 'SAVE_LOG',
+            key: `LOG_${logId}`,
+            logId,
+            data: logData,
+          });
+        } else {
+          removeOfflineAction(`LOG_${logId}`);
+        }
         return logData;
       } catch (err) {
         if (isRetryableWriteError(err)) {
@@ -188,6 +204,7 @@ export function useLogs(targetUid) {
           return logData;
         }
 
+        // خطأ حقيقي (مثل permission-denied): نرجّع الحالة السابقة
         setLogs((current) => {
           const restored = previousLog
             ? current.map((log) => (log.id === logId ? previousLog : log))
@@ -220,8 +237,20 @@ export function useLogs(targetUid) {
       }
 
       try {
-        await deleteDoc(doc(db, 'logs', logId));
-        removeOfflineAction(`LOG_${logId}`);
+        const result = await settleOrTimeout(
+          deleteDoc(doc(db, 'logs', logId)),
+          4000
+        );
+
+        if (result === 'pending') {
+          enqueueOfflineAction({
+            type: 'DELETE_LOG',
+            key: `LOG_${logId}`,
+            logId,
+          });
+        } else {
+          removeOfflineAction(`LOG_${logId}`);
+        }
       } catch (err) {
         if (isRetryableWriteError(err)) {
           console.warn('Could not confirm log deletion; queued for retry:', err);

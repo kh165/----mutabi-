@@ -12,6 +12,8 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { enqueueOfflineAction, getOfflineQueue, removeOfflineAction } from '../lib/offlineSync.js';
+import { settleOrTimeout } from '../lib/async.js';
 
 export const STARTER_PLAYLIST_ITEMS = [
   {
@@ -40,10 +42,63 @@ export const STARTER_PLAYLIST_ITEMS = [
   },
 ];
 
+function getProgressCacheKey(uid, activityId) {
+  return `mutabi_item_progress_${uid}_${activityId}`;
+}
+
+function getCachedProgress(uid, activityId) {
+  if (!uid || !activityId) return {};
+  try {
+    const raw = localStorage.getItem(getProgressCacheKey(uid, activityId));
+    return raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    console.warn('Could not read cached item progress:', error);
+    return {};
+  }
+}
+
+function saveCachedProgress(uid, activityId, progress) {
+  try {
+    localStorage.setItem(getProgressCacheKey(uid, activityId), JSON.stringify(progress));
+  } catch (error) {
+    console.warn('Could not save cached item progress:', error);
+  }
+}
+
+function mergePendingProgress(progress, uid, activityId) {
+  const merged = { ...progress };
+  const actions = getOfflineQueue()
+    .filter((action) => action.uid === uid && action.activityId === activityId)
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+  for (const action of actions) {
+    if (action.type === 'SAVE_ITEM_PROGRESS' && action.data?.itemId) {
+      const data = action.data;
+      merged[data.itemId] = {
+        isCompleted: Boolean(data.isCompleted),
+        minutesListened: Number(data.minutesListened) || 0,
+        durationMin: Number(data.durationMin) || 0,
+        percentage: Number(data.percentage) || (data.isCompleted ? 100 : 0),
+        updatedAt: data.updatedAt,
+      };
+    } else if (action.type === 'DELETE_ITEM_PROGRESS' && action.itemId) {
+      delete merged[action.itemId];
+    }
+  }
+  return merged;
+}
+
+function isRetryableWriteError(error) {
+  return (
+    (typeof navigator !== 'undefined' && !navigator.onLine) ||
+    ['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(error?.code)
+  );
+}
+
 export function useItemProgress(activityId) {
   const { user } = useAuth();
   const [items, setItems] = useState([]);
-  const [progress, setProgress] = useState({});
+  const [progress, setProgress] = useState(() => getCachedProgress(user?.uid, activityId));
   const [loading, setLoading] = useState(true);
   const progressMigrationsRef = useRef(new Set());
 
@@ -86,11 +141,12 @@ export function useItemProgress(activityId) {
 
   // Load user watch and listening progress
   useEffect(() => {
-    if (!user) {
+    if (!user || !activityId) {
       setProgress({});
       return;
     }
 
+    setProgress(getCachedProgress(user.uid, activityId));
     const progQuery = query(
       collection(db, 'itemProgress'),
       where('uid', '==', user.uid),
@@ -127,7 +183,9 @@ export function useItemProgress(activityId) {
             updatedAt: data.updatedAt,
           };
         });
-        setProgress(map);
+        const merged = mergePendingProgress(map, user.uid, activityId);
+        setProgress(merged);
+        saveCachedProgress(user.uid, activityId, merged);
       },
       (error) => {
         console.warn('ItemProgress listener note:', error);
@@ -157,37 +215,66 @@ export function useItemProgress(activityId) {
       };
 
       // Optimistic local state update
-      setProgress((prev) => ({
-        ...prev,
-        [itemId]: updatedRecord,
-      }));
+      const nextProgress = { ...progress, [itemId]: updatedRecord };
+      setProgress(nextProgress);
+      saveCachedProgress(user.uid, activityId, nextProgress);
+      const data = {
+        uid: user.uid,
+        activityId,
+        itemId,
+        playlistId: playlistId || null,
+        minutesListened: safeMinutes,
+        durationMin: safeDuration,
+        percentage,
+        isCompleted,
+        updatedAt: updatedRecord.updatedAt,
+      };
+      const queueAction = () =>
+        enqueueOfflineAction({
+          type: 'SAVE_ITEM_PROGRESS',
+          key: `ITEM_PROGRESS_${progressDocId}`,
+          uid: user.uid,
+          activityId,
+          itemId,
+          progressId: progressDocId,
+          data,
+        });
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        queueAction();
+        return updatedRecord;
+      }
 
       try {
         const ref = doc(db, 'itemProgress', progressDocId);
-        await setDoc(
-          ref,
-          {
-            uid: user.uid,
-            activityId,
-            itemId,
-            playlistId: playlistId || null,
-            minutesListened: safeMinutes,
-            durationMin: safeDuration,
-            percentage,
-            isCompleted,
-            watchedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
+        const result = await settleOrTimeout(
+          setDoc(
+            ref,
+            {
+              ...data,
+              watchedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true },
+          ),
+          4000,
         );
+        if (result === 'pending') {
+          queueAction();
+          return updatedRecord;
+        }
+        removeOfflineAction(`ITEM_PROGRESS_${progressDocId}`);
         return updatedRecord;
       } catch (err) {
-        setProgress((current) => {
-          const restored = { ...current };
-          if (previousRecord) restored[itemId] = previousRecord;
-          else delete restored[itemId];
-          return restored;
-        });
+        if (isRetryableWriteError(err)) {
+          queueAction();
+          return updatedRecord;
+        }
+        const restored = { ...nextProgress };
+        if (previousRecord) restored[itemId] = previousRecord;
+        else delete restored[itemId];
+        setProgress(restored);
+        saveCachedProgress(user.uid, activityId, restored);
         handleFirestoreError(err, OperationType.WRITE, `itemProgress/${progressDocId}`);
         throw err;
       }
@@ -203,47 +290,98 @@ export function useItemProgress(activityId) {
       const previousRecord = progress[itemId];
       const nextCompleted = !currentStatus;
       const minutes = nextCompleted ? durationMin : 0;
+      const updatedRecord = {
+        isCompleted: nextCompleted,
+        minutesListened: minutes,
+        durationMin,
+        percentage: nextCompleted ? 100 : 0,
+        updatedAt: new Date().toISOString(),
+      };
 
       // Optimistic state
-      setProgress((prev) => ({
-        ...prev,
-        [itemId]: {
-          isCompleted: nextCompleted,
-          minutesListened: minutes,
-          durationMin,
-          percentage: nextCompleted ? 100 : 0,
-          updatedAt: new Date().toISOString(),
-        },
-      }));
+      const nextProgress = { ...progress, [itemId]: updatedRecord };
+      if (!nextCompleted) delete nextProgress[itemId];
+      setProgress(nextProgress);
+      saveCachedProgress(user.uid, activityId, nextProgress);
+      const queueAction = () =>
+        enqueueOfflineAction(
+          nextCompleted
+            ? {
+                type: 'SAVE_ITEM_PROGRESS',
+                key: `ITEM_PROGRESS_${progressDocId}`,
+                uid: user.uid,
+                activityId,
+                itemId,
+                progressId: progressDocId,
+                data: {
+                  uid: user.uid,
+                  activityId,
+                  itemId,
+                  minutesListened: durationMin,
+                  durationMin,
+                  percentage: 100,
+                  isCompleted: true,
+                  updatedAt: updatedRecord.updatedAt,
+                },
+              }
+            : {
+                type: 'DELETE_ITEM_PROGRESS',
+                key: `ITEM_PROGRESS_${progressDocId}`,
+                uid: user.uid,
+                activityId,
+                itemId,
+                progressId: progressDocId,
+              },
+        );
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        queueAction();
+        return;
+      }
 
       try {
         const ref = doc(db, 'itemProgress', progressDocId);
         if (!nextCompleted) {
-          await deleteDoc(ref);
+          const result = await settleOrTimeout(deleteDoc(ref), 4000);
+          if (result === 'pending') {
+            queueAction();
+            return;
+          }
         } else {
-          await setDoc(
-            ref,
-            {
-              uid: user.uid,
-              activityId,
-              itemId,
-              minutesListened: durationMin,
-              durationMin,
-              percentage: 100,
-              isCompleted: true,
-              watchedAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true }
+          const result = await settleOrTimeout(
+            setDoc(
+              ref,
+              {
+                uid: user.uid,
+                activityId,
+                itemId,
+                minutesListened: durationMin,
+                durationMin,
+                percentage: 100,
+                isCompleted: true,
+                watchedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true },
+            ),
+            4000,
           );
+          if (result === 'pending') {
+            queueAction();
+            return;
+          }
         }
+        removeOfflineAction(`ITEM_PROGRESS_${progressDocId}`);
       } catch (err) {
-        setProgress((current) => {
-          const restored = { ...current };
-          if (previousRecord) restored[itemId] = previousRecord;
-          else delete restored[itemId];
-          return restored;
-        });
+        if (isRetryableWriteError(err)) {
+          queueAction();
+          return;
+        }
+        const restored = { ...nextProgress };
+        if (previousRecord) restored[itemId] = previousRecord;
+        else delete restored[itemId];
+        setProgress(restored);
+        saveCachedProgress(user.uid, activityId, restored);
         handleFirestoreError(err, OperationType.WRITE, `itemProgress/${progressDocId}`);
         throw err;
       }

@@ -1,3 +1,4 @@
+import { settleOrTimeout } from '../lib/async.js';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
@@ -16,10 +17,9 @@ import {
   Search,
   CheckCircle2,
   Clock,
-  Star,
+  Bookmark,
   Trash2,
   Calendar,
-  Sparkles,
   Layers,
   ArrowUpDown,
   Folder,
@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import { db } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { enqueueOfflineAction } from '../lib/offlineSync.js';
+import { enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
 // ==========================================
 // 1. Constants
@@ -72,6 +72,19 @@ function setLocalTodos(uid, items) {
   try {
     localStorage.setItem(`mutabi_todos_${uid}`, JSON.stringify(items));
   } catch {}
+}
+
+function getPendingTodoList(uid) {
+  const latestAction = getOfflineQueue()
+    .filter(
+      (action) =>
+        ['SAVE_TODO', 'DELETE_TODO', 'SYNC_TODOS'].includes(action.type) &&
+        action.uid === uid &&
+        Array.isArray(action.todosList),
+    )
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+    .at(-1);
+  return latestAction?.todosList || null;
 }
 
 // ==========================================
@@ -117,14 +130,21 @@ export function useTodos() {
         // Sort descending by creation date
         cloudTodos.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
-        // If cloud has documents, make cloud the source of truth
-        if (cloudTodos.length > 0 || snapshot.metadata.fromCache === false) {
+        const pendingTodos = getPendingTodoList(user.uid);
+        // Keep the latest local edits visible while their Firestore write is pending.
+        if (pendingTodos) {
+          setTodos(pendingTodos);
+          setLocalTodos(user.uid, pendingTodos);
+          setSyncStatus('pending');
+        } else if (cloudTodos.length > 0 || snapshot.metadata.fromCache === false) {
           setTodos(cloudTodos);
           setLocalTodos(user.uid, cloudTodos);
+          setSyncStatus('synced');
         }
 
-        setSyncStatus('synced');
-        setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        if (!pendingTodos) {
+          setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }
         setErrorMessage(null);
         setLoading(false);
       },
@@ -133,10 +153,12 @@ export function useTodos() {
         console.warn('Firestore subcollection listener error, attempting userDoc fallback:', err);
 
         // Fallback: Check if todos are saved in the userDoc in Firestore
-        if (userDoc?.todosList && Array.isArray(userDoc.todosList)) {
-          setTodos(userDoc.todosList);
-          setLocalTodos(user.uid, userDoc.todosList);
-          setSyncStatus('synced');
+        const pendingTodos = getPendingTodoList(user.uid);
+        const fallbackTodos = pendingTodos || userDoc?.todosList;
+        if (Array.isArray(fallbackTodos)) {
+          setTodos(fallbackTodos);
+          setLocalTodos(user.uid, fallbackTodos);
+          setSyncStatus(pendingTodos ? 'pending' : 'synced');
           setErrorMessage(null);
         } else {
           setSyncStatus('error');
@@ -162,15 +184,35 @@ export function useTodos() {
       let userDocSuccess = false;
       let subcollectionSuccess = false;
       let writeError = null;
+      const queueTodoChange = () => {
+        enqueueOfflineAction({
+          type: specificTodoAction?.action === 'delete' ? 'DELETE_TODO' : 'SAVE_TODO',
+          key: `TODO_${specificTodoAction?.todoId || 'all'}`,
+          uid: user.uid,
+          todoId: specificTodoAction?.todoId,
+          data: specificTodoAction?.data,
+          todosList: nextTodos,
+        });
+        setSyncStatus('pending');
+        setLastSyncedTime('محفوظ ومؤمّن محلياً (المزامنة تلقائية عند الاتصال)');
+      };
+
+      if (!navigator.onLine) {
+        queueTodoChange();
+        return;
+      }
 
       // 1. Primary Cloud Persistence: Backup to user's root document (always permitted for user owner)
       try {
         const userRef = doc(db, 'users', user.uid);
-        await updateDoc(userRef, {
-          todosList: nextTodos.slice(0, 100),
-          lastTodosSyncAt: new Date().toISOString(),
-        });
-        userDocSuccess = true;
+        const result = await settleOrTimeout(
+          updateDoc(userRef, {
+            todosList: nextTodos.slice(0, 100),
+            lastTodosSyncAt: new Date().toISOString(),
+          }),
+          4000
+        );
+        userDocSuccess = result !== 'pending';
       } catch (err) {
         console.warn('userDoc todos backup note:', err?.message);
         writeError = err;
@@ -181,38 +223,33 @@ export function useTodos() {
         try {
           const { action, todoId, data } = specificTodoAction;
           const todoRef = doc(db, 'users', user.uid, 'todos', todoId);
+          let result;
           if (action === 'set') {
-            await setDoc(todoRef, data);
+            result = await settleOrTimeout(setDoc(todoRef, data), 4000);
           } else if (action === 'update') {
-            await updateDoc(todoRef, data);
+            result = await settleOrTimeout(updateDoc(todoRef, data), 4000);
           } else if (action === 'delete') {
-            await deleteDoc(todoRef);
+            result = await settleOrTimeout(deleteDoc(todoRef), 4000);
           }
-          subcollectionSuccess = true;
+          subcollectionSuccess = result !== 'pending';
         } catch (err) {
           console.warn('subcollection write note:', err?.message);
-          if (!userDocSuccess) writeError = err;
+          writeError = writeError || err;
         }
       }
 
-      // If at least one cloud destination succeeded, the data IS saved in Firestore!
-      if (userDocSuccess || subcollectionSuccess) {
+      const allWritesSucceeded = userDocSuccess && (!specificTodoAction || subcollectionSuccess);
+      if (allWritesSucceeded) {
         setSyncStatus('synced');
         setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         setErrorMessage(null);
       } else {
-        // Enqueue into offline sync queue for automatic upload upon reconnection
-        enqueueOfflineAction({
-          type: specificTodoAction?.action === 'delete' ? 'DELETE_TODO' : 'SAVE_TODO',
-          key: `TODO_${specificTodoAction?.todoId || 'all'}`,
-          uid: user.uid,
-          todoId: specificTodoAction?.todoId,
-          data: specificTodoAction?.data,
-          todosList: nextTodos,
-        });
-        setSyncStatus('synced');
-        setLastSyncedTime('محفوظ ومؤمّن محلياً (المزامنة تلقائية عند الاتصال)');
-        setErrorMessage(null);
+        queueTodoChange();
+        setErrorMessage(
+          writeError && !['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(writeError.code)
+            ? 'تم حفظ التغيير على هذا الجهاز، لكن تعذّر رفعه إلى السحابة. تحقّق من صلاحيات الحساب.'
+            : null,
+        );
       }
     },
     [user?.uid]
@@ -222,14 +259,17 @@ export function useTodos() {
   useEffect(() => {
     const handleSyncEvent = (e) => {
       if (e.detail && !e.detail.isSyncing) {
-        setSyncStatus('synced');
-        setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        const pendingTodos = getPendingTodoList(user?.uid);
+        setSyncStatus(pendingTodos ? 'pending' : 'synced');
+        if (!pendingTodos) {
+          setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }
         setErrorMessage(null);
       }
     };
     window.addEventListener('mutabi_sync_status', handleSyncEvent);
     return () => window.removeEventListener('mutabi_sync_status', handleSyncEvent);
-  }, []);
+  }, [user?.uid]);
 
   // Add Todo
   const addTodo = useCallback(
@@ -302,7 +342,7 @@ export function useTodos() {
     [user?.uid, todos, syncToFirestore]
   );
 
-  // Toggle Star
+  // Toggle task highlight
   const toggleStar = useCallback(
     async (todoId, currentStarred) => {
       if (!user?.uid || !todoId) return;
@@ -619,9 +659,9 @@ function TodoItemCard({
                     ? 'text-amber-500 hover:text-amber-600'
                     : 'text-slate-300 dark:text-slate-600 hover:text-amber-500'
                 }`}
-                title={todo.isStarred ? 'إزالة من المميزة' : 'تمييز بنجمة'}
+                title={todo.isStarred ? 'إزالة التمييز' : 'تمييز المهمة'}
               >
-                <Star className={`w-4 h-4 ${todo.isStarred ? 'fill-amber-500' : ''}`} />
+                <Bookmark className={`w-4 h-4 ${todo.isStarred ? 'fill-amber-500' : ''}`} />
               </button>
 
               <button
@@ -870,7 +910,7 @@ function TodoModal({ isOpen, onClose, onSave, initialTodo = null }) {
               }`}
               title="تمييز المهمة بنجمة"
             >
-              <Star className={`w-5 h-5 ${isStarred ? 'fill-amber-500' : ''}`} />
+              <Bookmark className={`w-5 h-5 ${isStarred ? 'fill-amber-500' : ''}`} />
             </button>
             <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
               {initialTodo ? 'تعديل المهمة' : 'إضافة مهمة جديدة'}
@@ -1127,13 +1167,13 @@ function TodoQuickAdd({ onAdd, onOpenFullModal }) {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="اكتب مهمة جديدة ثم اضغط Enter (مثال: أذكار المساء، مراجعة ربع، مذاكرة درس)..."
-            className="flex-1 px-4 py-2.5 sm:py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 transition"
+            placeholder="اكتب مهمة جديدة واضغط Enter..."
+            className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 transition"
           />
           <button
             type="submit"
             disabled={!title.trim() || loading}
-            className="shrink-0 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-xs flex items-center gap-1.5 cursor-pointer transition"
+            className="shrink-0 px-3.5 sm:px-5 py-2 sm:py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-xs flex items-center gap-1.5 cursor-pointer transition"
           >
             <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
             <span className="hidden sm:inline">إضافة</span>
@@ -1145,7 +1185,7 @@ function TodoQuickAdd({ onAdd, onOpenFullModal }) {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px] sm:text-xs border-0 focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+              className="px-2 sm:px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px] sm:text-xs border-0 focus:ring-1 focus:ring-emerald-500 cursor-pointer"
             >
               {TODO_CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
                 <option key={cat.id} value={cat.id}>
@@ -1157,7 +1197,7 @@ function TodoQuickAdd({ onAdd, onOpenFullModal }) {
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              className="px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px] sm:text-xs border-0 focus:ring-1 focus:ring-emerald-500 cursor-pointer"
+              className="px-2 sm:px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px] sm:text-xs border-0 focus:ring-1 focus:ring-emerald-500 cursor-pointer"
             >
               {Object.entries(PRIORITY_CONFIG).map(([key, cfg]) => (
                 <option key={key} value={key}>
@@ -1173,7 +1213,8 @@ function TodoQuickAdd({ onAdd, onOpenFullModal }) {
             className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer"
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
-            خيارات إضافية (تاريخ، خطوات فرعية، تفاصيل)
+            <span className="hidden sm:inline">خيارات إضافية (تاريخ، خطوات فرعية، تفاصيل)</span>
+            <span className="sm:hidden">خيارات إضافية</span>
           </button>
         </div>
       </form>
@@ -1305,18 +1346,18 @@ export function TodosPage() {
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Banner / Header */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white p-5 sm:p-7 shadow-lg">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 text-white p-4 sm:p-7 shadow-lg">
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-semibold text-emerald-100">
+          <div className="space-y-1.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-[11px] sm:text-xs font-semibold text-emerald-100">
                 <CheckSquare className="w-3.5 h-3.5" />
-                <span>نظام إدارة المهام اليومية والشخصية</span>
+                <span>نظام إدارة المهام والإنجاز</span>
               </div>
 
               {/* Live Cloud Status Badge */}
               <div
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border backdrop-blur-md transition-all ${
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold border backdrop-blur-md transition-all ${
                   syncStatus === 'synced'
                     ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
                     : syncStatus === 'syncing'
@@ -1326,21 +1367,21 @@ export function TodosPage() {
                 title="حالة المزامنة الحية مع قاعدة بيانات Firestore السحابية"
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${
+                  className={`w-2 h-2 rounded-full shrink-0 ${
                     syncStatus === 'synced' ? 'bg-emerald-400' : syncStatus === 'syncing' ? 'bg-blue-400' : 'bg-amber-400'
                   }`}
                 />
-                <span>
+                <span className="truncate">
                   {syncStatus === 'synced'
-                    ? `متزامن سحابياً مع Firestore ${lastSyncedTime ? `(${lastSyncedTime})` : ''}`
+                    ? `متزامن مع Firestore ${lastSyncedTime ? `(${lastSyncedTime})` : ''}`
                     : syncStatus === 'syncing'
-                    ? 'جارٍ المزامنة مع السحابة...'
+                    ? 'جارٍ المزامنة...'
                     : 'محفوظ ومحمي محلياً'}
                 </span>
               </div>
             </div>
 
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">
+            <h1 className="text-lg sm:text-2xl font-black tracking-tight">
               قائمة المهام والإنجاز
             </h1>
             <p className="text-xs sm:text-sm text-emerald-100/90 max-w-xl leading-relaxed">
@@ -1348,13 +1389,13 @@ export function TodosPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+          <div className="flex items-center gap-2 self-start sm:self-auto shrink-0 flex-wrap">
             {/* Cloud Test Button */}
             <button
               type="button"
               onClick={handleManualCheck}
               disabled={isVerifying}
-              className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 flex items-center gap-1.5 transition cursor-pointer"
+              className="px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/20 flex items-center gap-1.5 transition cursor-pointer"
               title="فحص الاتصال المباشر وقراءة بياناتك من Firestore"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isVerifying ? 'animate-spin' : ''}`} />
@@ -1364,7 +1405,7 @@ export function TodosPage() {
             <button
               type="button"
               onClick={handleOpenNew}
-              className="px-4 sm:px-5 py-2.5 rounded-2xl bg-white hover:bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm shadow-md transition-all hover:scale-105 flex items-center gap-2 cursor-pointer"
+              className="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-emerald-50 text-emerald-800 font-black text-xs sm:text-sm shadow-md transition-all hover:scale-105 flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4 stroke-[3]" />
               <span>مهمة جديدة</span>
@@ -1428,7 +1469,7 @@ export function TodosPage() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400">نسبة الإنجاز</span>
             <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <Sparkles className="w-4 h-4" />
+              <CheckCircle2 className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2">
@@ -1496,7 +1537,7 @@ export function TodosPage() {
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
             >
-              <Star className="w-3.5 h-3.5 fill-current" />
+              <Bookmark className="w-3.5 h-3.5" />
               <span>المميزة</span>
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeTab === 'starred' ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}>
                 {stats.starredCount}

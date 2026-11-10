@@ -14,7 +14,6 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react';
 import {
   fetchPrayerTimes,
@@ -141,34 +140,63 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
 
   const handleEnableNotifications = async () => {
     const res = await requestNotificationPermission();
-    setPermissionStatus(res.status);
+    const newStatus = res.permission || (res.granted ? 'granted' : 'denied');
+    setPermissionStatus(newStatus);
+
     if (res.granted) {
+      if (updateUserDoc) {
+        const currentNotifs = userDoc?.notifications || NOTIFICATION_DEFAULT_SETTINGS;
+        await updateUserDoc({
+          notifications: {
+            ...currentNotifs,
+            enabled: true,
+          },
+        });
+      }
+      playNotificationTone();
       // Send a welcoming confirmation notification to test mobile reception
       await sendLocalNotification(
         'تم تفعيل تنبيهات الصلاة بنجاح 🕌',
         'ستصلك إشعارات الأذان مباشرة على شاشة هاتفك عند دخول وقت كل صلاة بإذن الله.',
-        'welcome_notif',
-        true
+        'welcome_notif'
       );
     }
   };
 
-  const handleTestAdhanSound = async () => {
-    setTestingSound(true);
-    try {
-      // 1. Play loud, beautiful adhan tone
-      playNotificationTone(true);
+  const [testingChime, setTestingChime] = useState(false);
 
-      // 2. Send immediate test notification to mobile lockscreen
-      await sendLocalNotification(
-        'الله أكبر • تجربة أذان وإشعار الصلاة 🕌',
-        'صوت الأذان يعمل بأعلى درجات النقاء، والإشعارات جاهزة للتنبيه على هاتفك.',
-        'test_adhan',
-        false
-      );
-    } finally {
-      setTimeout(() => setTestingSound(false), 3000);
-    }
+  const handleTestAdhanSound = (e) => {
+    e?.stopPropagation?.();
+    // 1. تشغيل فوري ومتزامن فوراً عند اللمس لضمان موافقة متصفحات الموبايل (User Gesture)
+    playNotificationTone('adhan');
+    setTestingSound(true);
+
+    // 2. إرسال إشعار النظام بشكل متوازي مع ملف الصوت المناسب
+    sendLocalNotification(
+      'الله أكبر • تجربة أذان وإشعار الصلاة 🕌',
+      'صوت الأذان يعمل بأعلى درجات النقاء، والإشعارات جاهزة للتنبيه على هاتفك.',
+      'test_adhan',
+      'adhan'
+    ).catch(() => {});
+
+    setTimeout(() => setTestingSound(false), 3000);
+  };
+
+  const handleTestChimeSound = (e) => {
+    e?.stopPropagation?.();
+    // 1. تشغيل فوري متزامن لنغمة التنبيهات
+    playNotificationTone('chime');
+    setTestingChime(true);
+
+    // 2. إرسال إشعار النظام مع نغمة الأذكار
+    sendLocalNotification(
+      'أذكار الصباح والمساء • تجربة التنبيه 🌿',
+      'نغمة التنبيهات والأذكار تعمل بنقاء عالٍ، جاهزة لإشعارك في شريط الهاتف.',
+      'test_chime',
+      'chime'
+    ).catch(() => {});
+
+    setTimeout(() => setTestingChime(false), 2500);
   };
 
   const formatCountdown = (mins) => {
@@ -207,13 +235,13 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
           {/* Location button */}
           <button
             type="button"
             onClick={handleDetectLocation}
             disabled={loadingLocation}
-            className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] sm:text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             title="تحديث مواقيت الصلاة من موقعك الحالي"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loadingLocation ? 'animate-spin' : ''}`} />
@@ -225,23 +253,43 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
             type="button"
             onClick={handleTestAdhanSound}
             disabled={testingSound}
-            className="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-            title="تجربة صوت الأذان العالي والإشعار على هاتفك"
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-[11px] sm:text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+            title="تجربة صوت الأذان العالي (الله أكبر الله أكبر)"
           >
             <Volume2 className={`w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 ${testingSound ? 'animate-bounce' : ''}`} />
-            <span>{testingSound ? 'جارٍ التشغيل 🔊' : 'تجربة صوت الأذان'}</span>
+            <span>{testingSound ? 'أذان 🔊' : 'أذان الأوقات'}</span>
+          </button>
+
+          {/* Test General Notification Chime button */}
+          <button
+            type="button"
+            onClick={handleTestChimeSound}
+            disabled={testingChime}
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 hover:bg-amber-100 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 text-[11px] sm:text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+            title="تجربة نغمة الأذكار والتنبيهات الأخرى"
+          >
+            <Bell className={`w-3.5 h-3.5 text-amber-600 dark:text-amber-400 ${testingChime ? 'animate-bounce' : ''}`} />
+            <span>{testingChime ? 'نغمة 🔔' : 'نغمة الأذكار'}</span>
           </button>
 
           {/* Phone Notification permission button */}
-          {permissionStatus !== 'granted' && (
+          {permissionStatus === 'granted' ? (
+            <span
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-100/80 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[11px] sm:text-xs font-bold flex items-center gap-1.5"
+              title="الإشعارات مفعلة على هذا الهاتف"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>الإشعارات مفعّلة 🔔</span>
+            </span>
+          ) : (
             <button
               type="button"
               onClick={handleEnableNotifications}
-              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] sm:text-xs font-bold shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
               title="تفعيل الإشعارات على الهاتف"
             >
               <BellRing className="w-3.5 h-3.5" />
-              <span>تفعيل إشعارات الهاتف</span>
+              <span>تفعيل الإشعارات</span>
             </button>
           )}
         </div>
@@ -256,23 +304,23 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
 
       {/* Active & Next Prayer Highlight Banner */}
       {nextPrayer && (
-        <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+        <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl p-2.5 sm:p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-            <span className="font-bold text-emerald-900 dark:text-emerald-200">
-              الصلاة القادمة: <strong className="text-emerald-700 dark:text-emerald-400 font-black">صلاة {nextPrayer.name}</strong> في تمام الساعة {nextPrayer.time}
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+            <span className="font-bold text-emerald-900 dark:text-emerald-200 text-[11px] sm:text-xs">
+              الصلاة القادمة: <strong className="text-emerald-700 dark:text-emerald-400 font-black">صلاة {nextPrayer.name}</strong> في {nextPrayer.time}
             </span>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-3 py-1 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-2xs">
-            <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+          <div className="inline-flex items-center gap-1.5 font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-xl border border-emerald-200 dark:border-emerald-800 shadow-2xs text-[11px] sm:text-xs">
+            <Clock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <span>باقي على الأذان: {formatCountdown(nextPrayer.diffMinutes)}</span>
           </div>
         </div>
       )}
 
-      {/* The 5 Prayers Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
+      {/* The 5 Prayers Row - Unified 5-column responsive row */}
+      <div className="grid grid-cols-5 gap-1 sm:gap-2.5 md:gap-3">
         {PRAYERS_LIST.map((prayer) => {
           const Icon = prayer.icon;
           const time = prayerTimes[prayer.id];
@@ -282,28 +330,28 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
           return (
             <div
               key={prayer.id}
-              className={`p-3 rounded-2xl border transition-all text-center flex flex-col items-center justify-center gap-1 relative overflow-hidden ${
+              className={`p-1.5 sm:p-3 rounded-xl sm:rounded-2xl border transition-all text-center flex flex-col items-center justify-center gap-0.5 sm:gap-1 relative overflow-hidden min-h-[66px] sm:min-h-[85px] ${
                 isCurrentActive
-                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm scale-102 font-bold'
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs scale-[1.02] font-bold'
                   : isNext
                   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200'
                   : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200/80 dark:border-slate-800 text-slate-800 dark:text-slate-200'
               }`}
             >
               {isCurrentActive && (
-                <span className="absolute top-1 start-1 text-[9px] bg-white text-emerald-800 font-black px-1.5 py-0.2 rounded-full">
-                  الوقت الحالي
+                <span className="hidden sm:inline absolute top-1 start-1 text-[8px] sm:text-[9px] bg-white text-emerald-800 font-black px-1.5 py-0.2 rounded-full">
+                  الآن
                 </span>
               )}
               {isNext && (
-                <span className="absolute top-1 start-1 text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.2 rounded-full">
+                <span className="hidden sm:inline absolute top-1 start-1 text-[8px] sm:text-[9px] bg-amber-500 text-white font-black px-1.5 py-0.2 rounded-full">
                   القادمة
                 </span>
               )}
 
-              <Icon className={`w-5 h-5 ${isCurrentActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
-              <span className="text-xs font-bold">{prayer.name}</span>
-              <span className={`text-sm sm:text-base font-black ${isCurrentActive ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
+              <Icon className={`w-3.5 h-3.5 sm:w-5 sm:h-5 ${isCurrentActive ? 'text-white' : 'text-slate-500 dark:text-slate-400'}`} />
+              <span className="text-[10px] sm:text-xs font-bold leading-tight truncate">{prayer.name}</span>
+              <span className={`text-[11px] sm:text-sm md:text-base font-black tabular-nums ${isCurrentActive ? 'text-white' : 'text-slate-900 dark:text-white'}`}>
                 {time}
               </span>
             </div>

@@ -11,6 +11,14 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
+
+function isRetryableWriteError(error) {
+  return (
+    !navigator.onLine ||
+    ['unavailable', 'deadline-exceeded', 'network-request-failed'].includes(error?.code)
+  );
+}
 
 export function useAdminNotes(conversationUid = null) {
   const { user, isAdmin } = useAuth();
@@ -45,7 +53,18 @@ export function useAdminNotes(conversationUid = null) {
       q,
       (snapshot) => {
         const list = [];
-        snapshot.forEach((d) => list.push({ id: d.id, ...d.data() }));
+        const pendingReads = new Set(
+          getOfflineQueue()
+            .filter((action) => action.type === 'MARK_NOTE_READ' && action.uid === user.uid)
+            .map((action) => action.noteId)
+        );
+        snapshot.forEach((d) =>
+          list.push({
+            id: d.id,
+            ...d.data(),
+            isRead: d.data().isRead || pendingReads.has(d.id),
+          })
+        );
         list.sort(
           (a, b) =>
             (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0)
@@ -65,11 +84,39 @@ export function useAdminNotes(conversationUid = null) {
   }, [user?.uid, isAdmin, conversationUid]);
 
   const markAsRead = async (noteId) => {
+    if (!user?.uid) throw new Error('You must be signed in to mark a note as read.');
+    const note = notes.find((item) => item.id === noteId);
+    if (!note || note.isRead) return;
+
+    setNotes((current) =>
+      current.map((item) => (item.id === noteId ? { ...item, isRead: true } : item))
+    );
+
+    const queueRead = () =>
+      enqueueOfflineAction({
+        type: 'MARK_NOTE_READ',
+        key: `NOTE_READ_${noteId}`,
+        noteId,
+        uid: user.uid,
+      });
+
+    if (!navigator.onLine) {
+      queueRead();
+      return;
+    }
+
     try {
       const ref = doc(db, 'notes', noteId);
       await updateDoc(ref, { isRead: true });
       setError(null);
     } catch (err) {
+      if (isRetryableWriteError(err)) {
+        queueRead();
+        return;
+      }
+      setNotes((current) =>
+        current.map((item) => (item.id === noteId ? { ...item, isRead: false } : item))
+      );
       setError(err);
       handleFirestoreError(err, OperationType.UPDATE, `notes/${noteId}`);
       throw err;

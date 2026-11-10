@@ -4,6 +4,8 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+const YEAR = 60 * 60 * 24 * 365;
+
 export default defineConfig(() => {
   return {
     plugins: [
@@ -11,6 +13,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
+        injectRegister: false, // التسجيل بيتم من main.jsx
         includeAssets: [
           'favicon.ico',
           'favicon-16x16.png',
@@ -19,7 +22,8 @@ export default defineConfig(() => {
           'apple-touch-icon.png',
           'logo.png',
           'logo-mark.png',
-          'manifest.webmanifest',
+          'fonts/*.ttf',
+          'audio/*.mp3',
         ],
         manifest: {
           id: '/',
@@ -34,65 +38,83 @@ export default defineConfig(() => {
           dir: 'rtl',
           lang: 'ar',
           icons: [
-            {
-              src: '/pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: '/pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: '/pwa-maskable-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable',
-            },
+            { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024, // 15 MB to cache bundled authentic Quran, Hadith and fonts
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,webmanifest,json}'],
+          clientsClaim: true,
+          skipWaiting: true,
+          cleanupOutdatedCaches: true,
+          importScripts: ['/notification-handler.js'],
+          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,webmanifest,mp3}'],
+          // أي تنقل داخل التطبيق يرجع لـ index.html (ضروري للأوفلاين)
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/__/],
           runtimeCaching: [
             {
-              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              // نصوص القرآن والتفسير (نفس اسم الكاش المستخدم في زر التحميل)
+              urlPattern: /^https:\/\/(api\.alquran\.cloud|quranenc\.com|api\.quran\.com)\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'google-fonts-cache',
-                expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                cacheName: 'quran-text-cache',
+                expiration: { maxEntries: 700, maxAgeSeconds: YEAR },
                 cacheableResponse: { statuses: [0, 200] },
               },
             },
             {
-              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              // الأحاديث
+              urlPattern: /^https:\/\/(cdn\.jsdelivr\.net\/gh\/fawazahmed0|raw\.githubusercontent\.com\/fawazahmed0)\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'gstatic-fonts-cache',
-                expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                cacheName: 'hadith-cache',
+                expiration: { maxEntries: 400, maxAgeSeconds: YEAR },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // صور صفحات المصحف
+              urlPattern: /^https:\/\/files\.quran\.app\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'quran-pages-cache',
+                expiration: { maxEntries: 700, maxAgeSeconds: YEAR },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // تلاوات السور والآيات
+              urlPattern: /^https:\/\/cdn\.islamic\.network\/quran\/audio(?:-surah)?\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'quran-audio-cache',
+                expiration: { maxEntries: 7000, maxAgeSeconds: YEAR },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+            {
+              // مواقيت الصلاة: الشبكة أولاً ثم آخر نسخة محفوظة
+              urlPattern: /^https:\/\/api\.aladhan\.com\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'prayer-times-cache',
+                networkTimeoutSeconds: 4,
+                expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 },
                 cacheableResponse: { statuses: [0, 200] },
               },
             },
           ],
         },
-        devOptions: {
-          enabled: false,
-        },
+        devOptions: { enabled: true },
       }),
     ],
     resolve: {
-      alias: {
-        '@': path.resolve(__dirname, '.'),
-      },
+      alias: { '@': path.resolve(__dirname, '.') },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

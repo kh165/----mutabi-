@@ -1,12 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import { Shell } from './components/layout/Shell.jsx';
-import { Today } from './pages/Today.jsx';
-import { Progress } from './pages/Progress.jsx';
-import { History } from './pages/History.jsx';
-import { Profile } from './pages/Profile.jsx';
-import { AdminDashboard } from './pages/admin/AdminDashboard.jsx';
 import { AuthPage } from './pages/auth/AuthPage.jsx';
 import { useActivities } from './hooks/useActivities.js';
 import { useLogs } from './hooks/useLogs.js';
@@ -16,18 +11,26 @@ import { getTodayDateString } from './lib/dates.js';
 import { Logo } from './components/layout/Logo.jsx';
 import { isDatabasePermissionError } from './firebase.js';
 import { Lock } from 'lucide-react';
-import { TasbeehPage } from './pages/TasbeehPage.jsx';
-import { HadithPage } from './pages/HadithPage.jsx';
-import { TodosPage } from './pages/TodosPage.jsx';
 import { PrayerAlertBanner } from './components/PrayerAlertBanner.jsx';
 import { AdminErrorBoundary } from './components/AdminErrorBoundary.jsx';
 import { AdminFollowConsentDialog } from './components/AdminFollowConsentDialog.jsx';
 import { PWAInstallBanner } from './components/layout/PWAInstallBanner.jsx';
+import { LoaderCircle } from 'lucide-react';
 import {
   NOTIFICATION_DEFAULT_SETTINGS,
   checkAndTriggerDueNotifications,
 } from './lib/notifications.js';
 import { applyPrayerTimes, fetchPrayerTimes, getLocalDateKey } from './lib/prayerTimes.js';
+import { getOfflinePackageStatus } from './lib/offlineSync.js';
+
+const Today = lazy(() => import('./pages/Today.jsx').then((module) => ({ default: module.Today })));
+const Progress = lazy(() => import('./pages/Progress.jsx').then((module) => ({ default: module.Progress })));
+const History = lazy(() => import('./pages/History.jsx').then((module) => ({ default: module.History })));
+const Profile = lazy(() => import('./pages/Profile.jsx').then((module) => ({ default: module.Profile })));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx').then((module) => ({ default: module.AdminDashboard })));
+const TasbeehPage = lazy(() => import('./pages/TasbeehPage.jsx').then((module) => ({ default: module.TasbeehPage })));
+const HadithPage = lazy(() => import('./pages/HadithPage.jsx').then((module) => ({ default: module.HadithPage })));
+const TodosPage = lazy(() => import('./pages/TodosPage.jsx').then((module) => ({ default: module.TodosPage })));
 
 function getInitialTab() {
   const hash = window.location.hash.replace('#', '').trim();
@@ -45,9 +48,87 @@ function MainApp() {
   const { activities } = useActivities();
   const { logs, saveLog } = useLogs();
   const [currentTab, setCurrentTabState] = useState(getInitialTab);
+  const [offlineSetupOpen, setOfflineSetupOpen] = useState(false);
   const [activeVisualAlert, setActiveVisualAlert] = useState(null);
   const triggeredMapRef = useRef({});
   const refreshingPrayerTimesRef = useRef(null);
+
+  useEffect(() => {
+    let restoreFrame = 0;
+    let restoreTimer = 0;
+    let restoreAttempts = 0;
+    let saveTimer = 0;
+    const key = `mutabi_scroll_${currentTab}`;
+    const savePosition = () => {
+      try {
+        localStorage.setItem(key, String(window.scrollY));
+      } catch (error) {
+        console.warn('Could not save the page scroll position:', error);
+      }
+    };
+    const scheduleSave = () => {
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(savePosition, 150);
+    };
+
+    const restorePosition = () => {
+      try {
+        const savedPosition = Number(localStorage.getItem(key));
+        if (Number.isFinite(savedPosition) && savedPosition >= 0) {
+          window.scrollTo(0, savedPosition);
+          if (window.scrollY < savedPosition && restoreAttempts < 20) {
+            restoreAttempts++;
+            restoreTimer = window.setTimeout(restorePosition, 250);
+          }
+        }
+      } catch (error) {
+        console.warn('Could not restore the page scroll position:', error);
+      }
+    };
+
+    restoreFrame = window.requestAnimationFrame(() => {
+      restoreFrame = window.requestAnimationFrame(restorePosition);
+    });
+    window.addEventListener('scroll', scheduleSave, { passive: true });
+    window.addEventListener('pagehide', savePosition);
+
+    return () => {
+      window.cancelAnimationFrame(restoreFrame);
+      window.clearTimeout(restoreTimer);
+      window.clearTimeout(saveTimer);
+      savePosition();
+      window.removeEventListener('scroll', scheduleSave);
+      window.removeEventListener('pagehide', savePosition);
+    };
+  }, [currentTab]);
+
+  useEffect(() => {
+    if (loading || !user?.uid || !userDoc) return;
+    try {
+      const preferenceKey = `mutabi_offline_setup_seen_${user.uid}`;
+      if (getOfflinePackageStatus().downloadedTier) {
+        localStorage.setItem(preferenceKey, 'true');
+        return;
+      }
+      if (localStorage.getItem(preferenceKey) !== 'true') {
+        setOfflineSetupOpen(true);
+      }
+    } catch (error) {
+      console.warn('Could not read the offline setup preference:', error);
+      setOfflineSetupOpen(true);
+    }
+  }, [loading, user?.uid, userDoc]);
+
+  const dismissOfflineSetup = () => {
+    try {
+      if (user?.uid) {
+        localStorage.setItem(`mutabi_offline_setup_seen_${user.uid}`, 'true');
+      }
+    } catch (error) {
+      console.warn('Could not save the offline setup preference:', error);
+    }
+    setOfflineSetupOpen(false);
+  };
 
   useEffect(() => {
     const location = userDoc?.prayerLocation;
@@ -296,33 +377,44 @@ function MainApp() {
         onSelectTab={handleSelectTab}
         currentStreak={currentStreak}
         totalPoints={userPoints.totalPoints}
+        showOfflineSetup={offlineSetupOpen}
+        onOfflineSetupDismiss={dismissOfflineSetup}
       >
-        {currentTab === 'today' && (
-          <Today
-            onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')}
-            onNavigateToHadith={() => handleSelectTab('hadith')}
-            onNavigateToTodos={() => handleSelectTab('todos')}
-          />
-        )}
-        {currentTab === 'tasbeeh' && <TasbeehPage />}
-        {currentTab === 'hadith' && <HadithPage />}
-        {currentTab === 'todos' && <TodosPage />}
-        {currentTab === 'progress' && <Progress />}
-        {currentTab === 'history' && <History />}
-        {currentTab === 'profile' && <Profile />}
-        {currentTab === 'admin' && (
-          isAdmin ? (
-            <AdminErrorBoundary>
-              <AdminDashboard />
-            </AdminErrorBoundary>
-          ) : (
+        <Suspense
+          fallback={
+            <div className="flex min-h-48 items-center justify-center text-emerald-700 dark:text-emerald-300" role="status">
+              <LoaderCircle className="h-6 w-6 animate-spin" />
+              <span className="sr-only">جارٍ تحميل الصفحة</span>
+            </div>
+          }
+        >
+          {currentTab === 'today' && (
             <Today
               onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')}
               onNavigateToHadith={() => handleSelectTab('hadith')}
               onNavigateToTodos={() => handleSelectTab('todos')}
             />
-          )
-        )}
+          )}
+          {currentTab === 'tasbeeh' && <TasbeehPage />}
+          {currentTab === 'hadith' && <HadithPage />}
+          {currentTab === 'todos' && <TodosPage />}
+          {currentTab === 'progress' && <Progress />}
+          {currentTab === 'history' && <History />}
+          {currentTab === 'profile' && <Profile />}
+          {currentTab === 'admin' && (
+            isAdmin ? (
+              <AdminErrorBoundary>
+                <AdminDashboard />
+              </AdminErrorBoundary>
+            ) : (
+              <Today
+                onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')}
+                onNavigateToHadith={() => handleSelectTab('hadith')}
+                onNavigateToTodos={() => handleSelectTab('todos')}
+              />
+            )
+          )}
+        </Suspense>
       </Shell>
       {userDoc && typeof userDoc.adminMonitoringConsent !== 'boolean' && (
         <AdminFollowConsentDialog

@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useTheme } from '../context/ThemeContext.jsx';
 import { useActivities } from '../hooks/useActivities.js';
 import { useLogs } from '../hooks/useLogs.js';
 import { useEncouragements } from '../hooks/useEncouragements.js';
@@ -24,15 +23,12 @@ import {
   BookOpen,
   SunMedium,
   CloudDownload,
-  Wifi,
-  WifiOff,
   CheckSquare,
 } from 'lucide-react';
 import { getOfflinePackageStatus } from '../lib/offlineSync.js';
 
-export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTodos, onNavigateToAdhkar }) {
-  const { user, userDoc, isAdmin, updateUserDoc } = useAuth();
-  const { isDark } = useTheme();
+export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTodos, onNavigateToAdhkar, onLogPagesRead }) {
+  const { userDoc, isAdmin, updateUserDoc } = useAuth();
   const { activities, loading: loadingActivities, seedPresetsToDatabase } = useActivities(false);
   const { logs, saveLog, resetLog, loading: loadingLogs } = useLogs();
   const { getRandomPhrase } = useEncouragements();
@@ -269,7 +265,7 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
     <div className="space-y-6 text-right">
       {/* Encouragement Pop-up */}
       {encouragementBanner && (
-        <div className="bg-white dark:bg-slate-900 border-2 border-emerald-500 shadow-xl rounded-3xl p-4 sm:p-5 text-right animate-in fade-in slide-in-from-top-4 duration-300 relative overflow-hidden">
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md bg-white dark:bg-slate-900 border-2 border-emerald-500 shadow-xl rounded-3xl p-4 sm:p-5 text-right animate-in fade-in slide-in-from-bottom-4 duration-300 relative overflow-hidden">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3.5 flex-1 min-w-0">
               <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 shadow-xs">
@@ -571,7 +567,11 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
 
           {/* Activities Grid */}
           <div>
-            {activities.length === 0 ? (
+            {loadingActivities || loadingLogs ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4" aria-label="جارٍ تحميل الأنشطة">
+                {Array.from({ length: 4 }, (_, index) => <div key={index} className="h-36 rounded-3xl bg-slate-100 dark:bg-slate-800 animate-pulse" />)}
+              </div>
+            ) : activities.length === 0 ? (
               <div className="p-8 sm:p-12 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl space-y-3 shadow-sm">
                 <Layers className="w-10 h-10 text-slate-400 mx-auto" />
                 <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm sm:text-base">
@@ -611,6 +611,7 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
                     latestPosition={latestPosition}
                     khatmaStats={khatmaStats}
                     onAchievement={handleAchievement}
+                    onLogPagesRead={onLogPagesRead}
                     customTarget={userDoc?.customTargets?.[activity.id]}
                     onUpdateTarget={handleUpdateTarget}
                   />
@@ -626,34 +627,7 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
         isOpen={quranModalOpen}
         onClose={() => setQuranModalOpen(false)}
         initialSurahNumber={1}
-        onLogPagesRead={async (surah) => {
-          const readAct = activities.find((a) => a.type === 'read' || a.title.includes('تلاوة'));
-          if (readAct) {
-            const currentLog = logs.find(
-              (log) => log.activityId === readAct.id && log.date === selectedDate
-            );
-            const page = Number(surah.startPage);
-            const pagesRead = [...new Set([...(currentLog?.details?.pagesRead || []), page])]
-              .filter((value) => Number.isInteger(value) && value > 0 && value <= 604)
-              .sort((a, b) => a - b);
-            const amount = Math.max(Number(currentLog?.amount) || 0, pagesRead.length);
-            await saveLog(
-              readAct.id,
-              selectedDate,
-              amount,
-              true,
-              {
-                ...currentLog?.details,
-                surah: surah.name,
-                page,
-                lastPage: page,
-                pagesRead,
-                pagesCount: amount,
-              },
-              `قراءة الصفحة ${page} من سورة ${surah.name}`,
-            );
-          }
-        }}
+        onLogPagesRead={onLogPagesRead}
       />
 
 

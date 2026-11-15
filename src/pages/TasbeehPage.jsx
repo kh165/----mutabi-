@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLogs } from '../hooks/useLogs.js';
 import { useActivities } from '../hooks/useActivities.js';

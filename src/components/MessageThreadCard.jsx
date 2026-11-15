@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Check, CheckCheck, Clock3, Send } from 'lucide-react';
 
 function formatMessageTime(value) {

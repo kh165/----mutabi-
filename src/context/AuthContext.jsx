@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -13,6 +15,7 @@ import {
 import {
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
   runTransaction,
   updateDoc,
@@ -89,6 +92,15 @@ function getCachedAuth() {
   return { user: null, userDoc: null };
 }
 
+function shouldUseGoogleRedirect() {
+  if (typeof window === 'undefined') return false;
+  const isIos = /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+    (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+  const isStandalonePwa = window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+  return isIos || isStandalonePwa;
+}
+
 function isOfflineLikeError(err) {
   const msg = err?.message || '';
   return (
@@ -109,6 +121,7 @@ export function AuthProvider({ children }) {
   const cached = getCachedAuth();
   const [user, setUser] = useState(cached.user);
   const [userDoc, setUserDoc] = useState(cached.userDoc);
+  const [userDocLoadedFromServer, setUserDocLoadedFromServer] = useState(false);
   // لا نمنح صلاحية من الكاش أثناء بدء جلسة متصلة؛ ننتظر تحقق Firebase.
   // الكاش يُستخدم فقط داخل applySession عند انعدام الاتصال.
   const [isAdmin, setIsAdmin] = useState(false);
@@ -132,9 +145,10 @@ export function AuthProvider({ children }) {
     userDocUnsubRef.current = onSnapshot(
       doc(db, 'users', uid),
       (snap) => {
-        if (!snap.exists()) return;
+        if (!snap.exists() || snap.metadata.fromCache) return;
         const data = { ...snap.data(), uid };
         setUserDoc(data);
+        setUserDocLoadedFromServer(true);
         try {
           localStorage.setItem('mutabi_auth_userdoc', JSON.stringify(data));
         } catch {}
@@ -187,19 +201,21 @@ export function AuthProvider({ children }) {
           }
         }
 
-        const existedBefore = (await withTimeout(getDoc(userRef), 8000)).exists();
+        const existedBefore = (await withTimeout(getDocFromServer(userRef), 8000)).exists();
         const data = await withTimeout(
           ensureUserProfile(currentUser, pendingNameRef.current),
           8000
         );
         if (!stillCurrent()) return;
         setUserDoc({ ...data, uid: currentUser.uid });
+        setUserDocLoadedFromServer(true);
         pendingNameRef.current = null;
         if (existedBefore) updateDoc(userRef, { lastActiveAt: serverTimestamp() }).catch(() => {});
       } catch (err) {
         console.warn('Initial profile fetch warning:', err);
         if (!stillCurrent()) return;
         setUserDoc((prev) => prev || fallbackUserDoc(currentUser));
+        setUserDocLoadedFromServer(false);
         // نعرض شاشة الخطأ فقط لو القواعد رفضت فعلاً، مش لأي مشكلة اتصال
         if (err?.code === 'permission-denied') {
           setProfileSyncError(err);
@@ -208,10 +224,11 @@ export function AuthProvider({ children }) {
       }
     };
 
-    const applySession = (currentUser, isRealFirebaseUser) => {
+    const applySession = (currentUser) => {
       resolved = true;
       activeUidRef.current = currentUser.uid;
       setUser(currentUser);
+      setUserDocLoadedFromServer(false);
       setProfileSyncError(null);
 
       const rootAdmin = isRootAdminEmail(currentUser.email, currentUser.emailVerified === true);
@@ -237,6 +254,7 @@ export function AuthProvider({ children }) {
           (initialCached?.uid === currentUser.uid ? initialCached : null) ||
           fallbackUserDoc(currentUser)
       );
+      setUserDocLoadedFromServer(false);
       setLoading(false);
       void loadProfile(currentUser, rootAdmin);
     };
@@ -246,7 +264,7 @@ export function AuthProvider({ children }) {
       if (resolved || cancelled) return;
       const cachedUser = getCachedAuth().user;
       if (cachedUser) {
-        applySession(cachedUser, false);
+        applySession(cachedUser);
       } else {
         setLoading(false);
       }
@@ -258,14 +276,14 @@ export function AuthProvider({ children }) {
       stopUserDocListener();
 
       if (currentUser) {
-        applySession(currentUser, true);
+        applySession(currentUser);
         return;
       }
 
       // Firebase رجّع null: لو أوفلاين ومعانا جلسة محفوظة نكمل بها بدل تسجيل الخروج
       const cachedUser = getCachedAuth().user;
       if (cachedUser && !navigator.onLine) {
-        applySession(cachedUser, false);
+        applySession(cachedUser);
         return;
       }
 
@@ -273,6 +291,7 @@ export function AuthProvider({ children }) {
       activeUidRef.current = null;
       setUser(null);
       setUserDoc(null);
+      setUserDocLoadedFromServer(false);
       setIsAdmin(false);
       setProfileSyncError(null);
       setLoading(false);
@@ -286,10 +305,22 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
+  useEffect(() => {
+    getRedirectResult(auth).catch((err) => {
+      setError(err?.code === 'auth/unauthorized-domain'
+        ? 'هذا النطاق غير مصرح له في مشروع Firebase. يرجى إضافته إلى النطاقات المصرح بها في إعدادات Authentication.'
+        : 'تعذر إكمال تسجيل الدخول عبر Google، يرجى المحاولة مرة أخرى');
+    });
+  }, []);
+
   const signInWithGoogle = async () => {
     setError(null);
     try {
       const provider = new GoogleAuthProvider();
+      if (shouldUseGoogleRedirect()) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       await signInWithPopup(auth, provider);
     } catch (err) {
       const code = err?.code || '';
@@ -345,6 +376,7 @@ export function AuthProvider({ children }) {
       }
       const newDoc = await ensureUserProfile(cred.user, displayName);
       setUserDoc({ ...newDoc, uid: cred.user.uid });
+      setUserDocLoadedFromServer(true);
       pendingNameRef.current = null;
     } catch (err) {
       if (!auth.currentUser) pendingNameRef.current = null;
@@ -462,6 +494,7 @@ export function AuthProvider({ children }) {
     }
     setUser(null);
     setUserDoc(null);
+    setUserDocLoadedFromServer(false);
     setIsAdmin(false);
   };
 
@@ -469,7 +502,8 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
-        userDoc,
+        userDoc: userDocLoadedFromServer ? userDoc : null,
+        userDocLoadedFromServer,
         isAdmin,
         loading,
         error,

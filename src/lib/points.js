@@ -100,7 +100,9 @@ export function calculateUserPoints(logs = [], activities = [], streaks = { curr
     } else if (activityTitle.includes('أذكار')) {
       const completedCategories = log.details?.completedCategories;
       const categoryCount = completedCategories && typeof completedCategories === 'object'
-        ? Object.values(completedCategories).filter(Boolean).length
+        ? Object.entries(completedCategories).filter(([category, complete]) =>
+          complete === true && (category === 'أذكار الصباح' || category === 'أذكار المساء')
+        ).length
         : 1;
       worshipPoints += categoryCount * 25;
       adhkarCount += categoryCount;

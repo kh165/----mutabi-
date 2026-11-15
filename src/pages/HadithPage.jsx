@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FORTY_HADITHS, HADITH_CATEGORIES } from '../data/fortyHadith.js';
 import {
   HADITH_COLLECTIONS,
@@ -29,10 +29,7 @@ import {
   ArrowLeft,
   Loader2,
   Download,
-  Scroll,
   Library,
-  BookMarked,
-  Filter,
 } from 'lucide-react';
 
 export function HadithPage() {
@@ -79,6 +76,11 @@ export function HadithPage() {
   // Expandable benefits for 40 Hadiths
   const [expandedBenefits, setExpandedBenefits] = useState({});
   const [copiedId, setCopiedId] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+  const showToast = (message) => {
+    setToastMessage(message);
+    setTimeout(() => setToastMessage(null), 3200);
+  };
 
   // Save selected collection preference
   const handleSelectCollection = (collId) => {
@@ -130,20 +132,32 @@ export function HadithPage() {
 
   // Toggle Read status with progress update
   const toggleRead = async (hadithId) => {
-    const isCurrentRead = !!readHadithMap[hadithId];
-    await setHadithProgress(selectedCollection, hadithId, {
-      read: !isCurrentRead,
-      bookmarked: !!bookmarkedMap[hadithId],
-    });
+    hadithId = String(hadithId);
+    try {
+      const isCurrentRead = !!readHadithMap[hadithId];
+      await setHadithProgress(selectedCollection, hadithId, {
+        read: !isCurrentRead,
+        bookmarked: !!bookmarkedMap[hadithId],
+      });
+    } catch (error) {
+      console.error('Failed to update hadith read status:', error);
+      showToast('تعذر حفظ حالة القراءة. تحقق من الاتصال ثم حاول مجدداً.');
+    }
   };
 
   // Toggle Bookmark
   const toggleBookmark = async (hadithId) => {
-    const isCurrentBookmarked = !!bookmarkedMap[hadithId];
-    await setHadithProgress(selectedCollection, hadithId, {
-      read: !!readHadithMap[hadithId],
-      bookmarked: !isCurrentBookmarked,
-    });
+    hadithId = String(hadithId);
+    try {
+      const isCurrentBookmarked = !!bookmarkedMap[hadithId];
+      await setHadithProgress(selectedCollection, hadithId, {
+        read: !!readHadithMap[hadithId],
+        bookmarked: !isCurrentBookmarked,
+      });
+    } catch (error) {
+      console.error('Failed to update hadith bookmark:', error);
+      showToast('تعذر حفظ المفضلة. تحقق من الاتصال ثم حاول مجدداً.');
+    }
   };
 
   const toggleExpand = (hadithId) => {
@@ -304,6 +318,11 @@ export function HadithPage() {
 
   return (
     <div className="space-y-6 text-right max-w-6xl mx-auto pb-16">
+      {toastMessage && (
+        <div role="status" className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-bold shadow-xl">
+          {toastMessage}
+        </div>
+      )}
       {/* Hero Header */}
       <div className={`rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden border border-emerald-700/40 ${themeStyles.heroBg}`}>
         <div className="absolute top-0 end-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />

@@ -1,12 +1,6 @@
 import { CalculationMethod, Coordinates, PrayerTimes } from 'adhan';
 import prayerMethodMapping from '../../shared/prayer-methods.cjs';
-const PRAYER_TIME_KEYS = {
-  Fajr: 'fajr',
-  Dhuhr: 'dhuhr',
-  Asr: 'asr',
-  Maghrib: 'maghrib',
-  Isha: 'isha',
-};
+
 
 
 function getLocalCalculationParameters(method, timezone) {

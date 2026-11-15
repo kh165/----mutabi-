@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, BookMarked, BookOpen, BookOpenCheck, ExternalLink, LibraryBig, Minus, Plus, Search } from 'lucide-react';
 
 const collections = [

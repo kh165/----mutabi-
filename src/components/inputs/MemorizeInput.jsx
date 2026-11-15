@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { SURAHS, validateAyahRange, getSurah } from '../../data/quran.js';
 import { Check, AlertCircle, History, RotateCcw } from 'lucide-react';
 

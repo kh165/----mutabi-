@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { getDateOffset, formatArabicDate, getDayOfWeek } from '../lib/dates.js';
 
 export function Heatmap({ logs = [], todayStr, daysCount = 70 }) {

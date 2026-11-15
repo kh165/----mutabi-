@@ -1,4 +1,3 @@
-import React from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useActivities } from '../hooks/useActivities.js';
@@ -20,7 +19,6 @@ import {
   CheckCircle,
   Sprout,
   Target,
-  CircleDot,
 } from 'lucide-react';
 import { TOTAL_PAGES } from '../data/quran.js';
 

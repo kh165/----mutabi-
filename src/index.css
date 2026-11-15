@@ -35,3 +35,6 @@
 .safe-area-bottom {
   padding-bottom: max(0.375rem, env(safe-area-inset-bottom));
 }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }

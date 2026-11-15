@@ -42,6 +42,7 @@ export function Shell({
   totalPoints = 0,
   showOfflineSetup = false,
   onOfflineSetupDismiss,
+  onLogPagesRead,
   children,
 }) {
   const { user, userDoc, isAdmin, logout } = useAuth();
@@ -76,14 +77,6 @@ export function Shell({
 
   const openQuran = () => {
     if (!quranHistoryEntryRef.current) {
-      // Add a same-page guard entry first, then the Quran entry. The first
-      // browser Back now returns to this app page and closes the reader,
-      // even when the user opened the app directly from an external link.
-      window.history.pushState(
-        { ...(window.history.state || {}), mutabiQuranBase: true },
-        '',
-        window.location.href,
-      );
       window.history.pushState(
         { ...(window.history.state || {}), mutabiQuranOpen: true },
         '',
@@ -465,11 +458,13 @@ export function Shell({
               return (
                 <button
                   key={item.id}
+                  type="button"
+                  aria-current={active ? 'page' : undefined}
                   onClick={() => onSelectTab(item.id)}
-                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all text-right cursor-pointer ${
+                  className={`box-border w-full min-h-[42px] border flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-colors duration-150 text-right cursor-pointer ${
                     active
                       ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shadow-2xs border border-emerald-200/60 dark:border-emerald-800/60'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                      : 'border-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${active ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}`} />
@@ -501,7 +496,7 @@ export function Shell({
       {/* Mobile Bottom Navigation Bar */}
       <nav
         aria-label="التنقل الرئيسي"
-        className="safe-area-bottom md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 z-40 px-2 pt-1.5 flex items-center justify-start overflow-x-auto scrollbar-none shadow-lg gap-1 scroll-smooth"
+        className="safe-area-bottom md:hidden fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 z-40 px-2 pt-1.5 flex items-center justify-start overflow-x-auto scrollbar-none shadow-lg gap-1"
       >
         {navItems.map((item) => {
           const active = currentTab === item.id || (item.id === 'admin' && currentTab.startsWith('admin'));
@@ -509,10 +504,12 @@ export function Shell({
           return (
             <button
               key={item.id}
+              type="button"
+              aria-current={active ? 'page' : undefined}
               onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center justify-center min-w-[62px] sm:min-w-[70px] min-h-[48px] py-1 px-1 rounded-xl transition-all cursor-pointer shrink-0 ${
+              className={`box-border flex flex-col items-center justify-center min-w-[62px] sm:min-w-[70px] h-[48px] border border-transparent py-1 px-1 rounded-xl transition-colors duration-150 cursor-pointer shrink-0 ${
                 active
-                  ? 'text-emerald-700 dark:text-emerald-400 font-bold scale-105 bg-emerald-50/70 dark:bg-emerald-950/40'
+                  ? 'border-emerald-200/70 dark:border-emerald-800/70 text-emerald-700 dark:text-emerald-400 font-bold bg-emerald-50/70 dark:bg-emerald-950/40'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-xs font-medium'
               }`}
             >
@@ -530,6 +527,7 @@ export function Shell({
             isOpen
             onClose={closeQuran}
             initialSurahNumber={1}
+            onLogPagesRead={onLogPagesRead}
           />
         </Suspense>
       )}

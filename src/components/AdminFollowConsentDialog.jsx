@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Eye, EyeOff, Heart, Loader2 } from 'lucide-react';
 
 export function AdminFollowConsentDialog({ onChoose }) {

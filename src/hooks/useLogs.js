@@ -55,11 +55,11 @@ function applyPendingQueue(items, uid) {
   return [...map.values()];
 }
 
-export function useLogs(targetUid) {
+export function useLogs() {
   const { user } = useAuth();
-  const effectiveUid = targetUid || user?.uid;
+  const effectiveUid = user?.uid;
   const [logs, setLogs] = useState(() => getLocalLogsCache(effectiveUid));
-  const [loading, setLoading] = useState(!getLocalLogsCache(effectiveUid).length);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {

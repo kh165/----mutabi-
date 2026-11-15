@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { BookOpenCheck, CheckCircle2, ChevronDown, ExternalLink, Info } from 'lucide-react';
 import { SALAT_GUIDES } from '../data/salatGuides.js';
 

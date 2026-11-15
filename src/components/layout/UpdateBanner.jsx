@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export function UpdateBanner() {
   const [updateSW, setUpdateSW] = useState(null);

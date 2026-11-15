@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import confetti from 'canvas-confetti';
 import * as LucideIcons from 'lucide-react';
 import { Check, Plus, X, RotateCcw } from 'lucide-react';
@@ -19,6 +19,7 @@ export function ActivityCard({
   latestPosition,
   khatmaStats,
   onAchievement,
+  onLogPagesRead,
   customTarget,
   onUpdateTarget,
 }) {
@@ -125,6 +126,7 @@ export function ActivityCard({
 
   const handleResetLog = async (e) => {
     if (e) e.stopPropagation();
+    if (log && !window.confirm('هل تريد التراجع عن تسجيل هذا اليوم؟')) return;
     try {
       if (onResetLog) {
         await onResetLog(activity.id, dateStr);
@@ -195,7 +197,7 @@ export function ActivityCard({
   return (
     <>
       {saveError && (
-        <div role="alert" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md rounded-2xl bg-rose-700 px-4 py-3 text-sm font-bold text-white shadow-xl">
+        <div role="alert" className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md rounded-2xl bg-rose-700 px-4 py-3 text-sm font-bold text-white shadow-xl">
           {saveError}
           <button type="button" onClick={() => setSaveError(null)} className="ms-3 underline">إغلاق</button>
         </div>
@@ -263,7 +265,7 @@ export function ActivityCard({
                               if (e.key === 'Enter') handleSaveTarget(e);
                               if (e.key === 'Escape') setEditingTarget(false);
                             }}
-                            className="w-14 px-1.5 py-0.5 text-xs bg-slate-100 dark:bg-slate-800 border border-emerald-500 rounded font-bold text-center"
+                            className="w-14 px-1.5 py-0.5 text-base sm:text-xs bg-slate-100 dark:bg-slate-800 border border-emerald-500 rounded font-bold text-center"
                           />
                           <button
                             type="button"
@@ -430,7 +432,7 @@ export function ActivityCard({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 relative max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 relative max-h-[90dvh] overflow-y-auto"
           >
             <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
@@ -479,6 +481,7 @@ export function ActivityCard({
                 latestPosition={latestPosition}
                 dailyTarget={effectiveTarget}
                 onSave={handleModalSave}
+                onLogPagesRead={onLogPagesRead}
                 onReset={handleResetLog}
                 onClose={() => setModalOpen(false)}
               />
@@ -488,6 +491,7 @@ export function ActivityCard({
                 khatmaStats={khatmaStats}
                 dailyTarget={effectiveTarget}
                 onSave={handleModalSave}
+                onLogPagesRead={onLogPagesRead}
                 onReset={handleResetLog}
                 onClose={() => setModalOpen(false)}
               />

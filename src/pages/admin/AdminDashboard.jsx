@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { useTheme } from '../../context/ThemeContext.jsx';
-import { useActivities, INITIAL_PRESETS } from '../../hooks/useActivities.js';
+import { useActivities } from '../../hooks/useActivities.js';
 import { useAdminNotes } from '../../hooks/useAdminNotes.js';
 import { useEncouragements } from '../../hooks/useEncouragements.js';
 import { useItemProgress } from '../../hooks/useItemProgress.js';
@@ -11,7 +10,6 @@ import { getPrayerArabicName } from '../../lib/prayerNames.js';
 import { calculateStreaks, calculateKhatma } from '../../lib/stats.js';
 import { evaluateBadges } from '../../lib/badges.js';
 import { getSurah, TOTAL_PAGES } from '../../data/quran.js';
-import { ProgressRing } from '../../components/ProgressRing.jsx';
 import { MessageThreadCard } from '../../components/MessageThreadCard.jsx';
 import {
   collection,
@@ -27,7 +25,6 @@ import {
   Users,
   Shield,
   Layers,
-  CircleDot,
   Search,
   Plus,
   Trash2,
@@ -46,13 +43,9 @@ import {
   ArrowDown,
   Calendar,
   Flame,
-  BookOpen,
   Award,
-  AlertCircle,
-  Eye,
   CheckCircle2,
   XCircle,
-  ExternalLink,
 } from 'lucide-react';
 
 export const ICON_CATEGORIES = [
@@ -116,7 +109,6 @@ const AVAILABLE_COLORS = [
 
 export function AdminDashboard() {
   const { user, isAdmin } = useAuth();
-  const { isDark } = useTheme();
   const {
     activities,
     saveActivity,
@@ -183,7 +175,6 @@ export function AdminDashboard() {
   const [videoManageActivityId, setVideoManageActivityId] = useState(null);
   const [seeding, setSeeding] = useState(false);
   const [seedSuccess, setSeedSuccess] = useState(false);
-  const [newSubItemTitle, setNewSubItemTitle] = useState('');
 
   // Fetch users list
   useEffect(() => {
@@ -382,21 +373,7 @@ export function AdminDashboard() {
     }
   };
 
-  const handleAddFivePrayersDirectly = async () => {
-    const prayerPreset = INITIAL_PRESETS.find((p) => p.type === 'prayers');
-    if (prayerPreset) {
-      setAdminActionError(null);
-      try {
-        await saveActivity({
-          ...prayerPreset,
-          order: activities.length + 1,
-        });
-      } catch (error) {
-        console.error('Failed to add prayer activity:', error);
-        setAdminActionError('تعذر إضافة نشاط الصلوات. تحقق من الصلاحيات والاتصال ثم حاول مرة أخرى.');
-      }
-    }
-  };
+
 
   const filteredUsers = usersList.filter(
     (u) =>
@@ -413,23 +390,21 @@ export function AdminDashboard() {
   const inspectedDateLogs = userLogs.filter((l) => l.date === inspectionDate);
   const inspectedLogsMap = new Map(inspectedDateLogs.map((l) => [l.activityId, l]));
 
-  const completedActivitiesCount = activities.filter((a) => {
-    const l = inspectedLogsMap.get(a.id);
-    return l && l.completed;
-  }).length;
-
   const totalAssignedActivities = activities.filter((a) => {
     if (!a.isActive) return false;
     if (a.audience === 'all') return true;
     return a.assignedUids?.includes(selectedUser?.uid);
   });
+  const completedActivitiesCount = totalAssignedActivities.filter((activity) => {
+    return inspectedLogsMap.get(activity.id)?.completed;
+  }).length;
 
   const completionPercentage = totalAssignedActivities.length > 0
     ? Math.round((completedActivitiesCount / totalAssignedActivities.length) * 100)
     : 0;
 
   const tabs = [
-    { id: 'user-inspection', label: 'متابعة إنجازات المستخدمين', icon: Users },
+    { id: 'user-inspection', label: 'المستخدمون الموافقون على المتابعة', icon: Users },
     { id: 'overview', label: 'نظرة عامة', icon: Shield },
     { id: 'activities', label: 'إدارة الأنشطة والعبادات', icon: Layers },
     { id: 'encouragements', label: 'العبارات التشجيعية', icon: MessageSquareHeart },
@@ -439,7 +414,7 @@ export function AdminDashboard() {
   return (
     <div className="space-y-6 text-right">
       {adminActionError && (
-        <div role="alert" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-800 shadow-xl dark:border-rose-900 dark:bg-rose-950/90 dark:text-rose-200">
+        <div role="alert" className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-800 shadow-xl dark:border-rose-900 dark:bg-rose-950/90 dark:text-rose-200">
           {adminActionError}
           <button type="button" onClick={() => setAdminActionError(null)} className="ms-3 underline">إغلاق</button>
         </div>
@@ -515,7 +490,7 @@ export function AdminDashboard() {
                   placeholder="بحث بالاسم أو البريد..."
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-full ps-9 pe-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full ps-9 pe-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
             </div>
@@ -1433,7 +1408,7 @@ export function AdminDashboard() {
                   placeholder="وصف توضيحي للنشاط..."
                   value={editingActivity.description || ''}
                   onChange={(e) => setEditingActivity({ ...editingActivity, description: e.target.value })}
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
+                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-medium text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
@@ -1597,7 +1572,7 @@ export function AdminDashboard() {
 
 // Subcomponent for managing videos
 function VideoManagerModal({ activityId, onClose }) {
-  const { items, loading, saveActivityItem, deleteActivityItem } = useItemProgress(activityId);
+  const { items, saveActivityItem, deleteActivityItem } = useItemProgress(activityId);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [duration, setDuration] = useState(15);
@@ -1634,7 +1609,7 @@ function VideoManagerModal({ activityId, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 relative max-h-[90vh] overflow-y-auto text-right"
+        className="w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-800 relative max-h-[90dvh] overflow-y-auto text-right"
       >
         <div className="flex items-center justify-between pb-3.5 mb-3.5 border-b border-slate-100 dark:border-slate-800">
           <div>
@@ -1671,7 +1646,7 @@ function VideoManagerModal({ activityId, onClose }) {
               placeholder="مثال: الحلقة 1 - مقدمة وتفسير سورة الفاتحة"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100"
+              className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-medium text-slate-800 dark:text-slate-100"
             />
           </div>
 
@@ -1686,7 +1661,7 @@ function VideoManagerModal({ activityId, onClose }) {
                 placeholder="https://www.youtube.com/watch?v=..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-medium text-slate-800 dark:text-slate-100"
                 dir="ltr"
               />
             </div>
@@ -1699,7 +1674,7 @@ function VideoManagerModal({ activityId, onClose }) {
                 min={1}
                 value={duration}
                 onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-100"
+                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-medium text-slate-800 dark:text-slate-100"
               />
             </div>
           </div>

@@ -3,7 +3,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getMessaging } = require('firebase-admin/messaging');
 const { initializeApp } = require('firebase-admin/app');
 const { Coordinates, PrayerTimes, CalculationMethod } = require('adhan');
-const { METHOD_NAMES, resolvePrayerMethod } = require('../shared/prayer-methods.cjs');
+const { METHOD_NAMES, resolvePrayerMethod } = require('./shared/prayer-methods.cjs');
 initializeApp();
 const db = getFirestore();
 const PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];

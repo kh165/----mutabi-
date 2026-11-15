@@ -41,121 +41,37 @@ export async function requestNotificationPermission() {
  * مع تمرير نوع الصوت وتوجيهه إلى Service Worker لتجاوز قيود الخلفية
  */
 export async function sendLocalNotification(title, body, tag = 'mutabi_worship', soundType = 'gentle') {
-  if (typeof window === 'undefined') return false;
-
-  const soundUrl = '/audio/gentle_notification.wav';
-
-  // التحقق من دعم الإشعارات
-  if (!('Notification' in window)) {
-    console.warn('الإشعارات غير مدعومة في هذا المتصفح');
-    return false;
-  }
-
-  // إذا لم يتم منح الإذن بعد، نطلبه فوراً أثناء تفاعل المستخدم
+  if (typeof window === 'undefined' || !('Notification' in window)) return false;
   let permission = Notification.permission;
   if (permission === 'default') {
-    try {
-      permission = await Notification.requestPermission();
-    } catch (e) {
-      console.warn('فشل طلب إذن الإشعارات:', e);
-    }
+    try { permission = await Notification.requestPermission(); } catch { return false; }
   }
-
-  if (permission !== 'granted') {
-    return false;
-  }
-
-  const notificationOptions = {
-    body,
-    icon: '/pwa-192x192.png',
-    badge: '/favicon-32x32.png',
-    tag: tag || 'mutabi_alert',
-    renotify: true,
-    requireInteraction: false,
-    dir: 'rtl',
-    lang: 'ar',
-    sound: soundUrl,
-    vibrate: [150, 80, 150], // اهتزاز هادئ ومريح وغير مزعج
-    data: {
-      url: '/',
-      soundType: 'gentle_chime',
-      soundUrl,
-      dateOfArrival: Date.now(),
-    },
-    actions: [
-      { action: 'open', title: 'فتح مُتَابِـع' },
-    ],
+  if (permission !== 'granted') return false;
+  const options = {
+    body, icon: '/pwa-192x192.png', badge: '/favicon-32x32.png', tag: tag || 'mutabi_alert',
+    renotify: true, requireInteraction: false, dir: 'rtl', lang: 'ar', vibrate: [150, 80, 150],
+    data: { url: '/', soundType, dateOfArrival: Date.now() },
+    actions: [{ action: 'open', title: 'فتح مُتَابِـع' }],
   };
-
   try {
-    // 1. الأولوية للموبايل: تمرير الرسالة ومواصفات الصوت للـ Service Worker النشط
     if ('serviceWorker' in navigator) {
-      if (navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'SHOW_NOTIFICATION_WITH_SOUND',
-          title,
-          body,
-          tag,
-          soundType: 'gentle_chime',
-        });
-      }
-
-      let reg = null;
-      try {
-        reg = await navigator.serviceWorker.getRegistration();
-      } catch (err) {
-        console.warn('SW getRegistration error:', err);
-      }
-
-      if (!reg) {
-        reg = await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
-        ]).catch(() => null);
-      }
-
-      if (reg && typeof reg.showNotification === 'function') {
-        await reg.showNotification(title, notificationOptions);
+      let registration = await navigator.serviceWorker.getRegistration().catch(() => null);
+      if (!registration) registration = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+      ]).catch(() => null);
+      if (registration?.showNotification) {
+        await registration.showNotification(title, options);
         return true;
       }
     }
-
-    // 2. البديل للحواسيب المكتبية
-    const notification = new Notification(title, notificationOptions);
-    notification.onclick = function () {
-      window.focus();
-      this.close();
-    };
+    const notification = new Notification(title, options);
+    notification.onclick = function () { window.focus(); this.close(); };
     return true;
-  } catch (err) {
-    console.warn('محاولة إرسال الإشعار عبر البديل:', err);
-    try {
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.ready;
-        if (reg?.showNotification) {
-          await reg.showNotification(title, notificationOptions);
-          return true;
-        }
-      }
-      new Notification(title, notificationOptions);
-      return true;
-    } catch (e) {
-      console.error('تعذر إظهار إشعار النظام على هذا الجهاز:', e);
-      return false;
-    }
+  } catch (error) {
+    console.warn('تعذر إظهار إشعار النظام على هذا الجهاز:', error);
+    return false;
   }
-}
-
-// الاستماع لأي أوامر تشغيل صوت قادمة من الـ Service Worker في الخلفية
-if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (
-      event.data?.type === 'PLAY_AUDIO_FROM_SW' ||
-      event.data?.type === 'NOTIFICATION_CLICKED'
-    ) {
-      playNotificationTone(event.data.soundType || 'adhan');
-    }
-  });
 }
 
 /**
@@ -168,18 +84,18 @@ export function getNotificationPermissionStatus() {
   return Notification.permission;
 }
 
-// Memory-cached Audio instances for instant, latency-free playback on mobile
-let preloadedGentleAudio = null;
-
-function getAudioInstance() {
+const notificationAudio = {};
+let notificationAudioContext = null;
+function getAudioInstance(type = 'gentle') {
   try {
-    if (!preloadedGentleAudio) {
-      preloadedGentleAudio = new Audio(CHIME_AUDIO_DATA_URI);
-      preloadedGentleAudio.volume = 0.45; // صوت هادئ ومريح ومناسب للأذن
-      preloadedGentleAudio.playsInline = true;
+    if (!notificationAudio[type]) {
+      const source = type === 'adhan' ? (HUSSARY_ADHAN_AUDIO_DATA_URI || ADHAN_AUDIO_DATA_URI) : CHIME_AUDIO_DATA_URI;
+      notificationAudio[type] = new Audio(source);
+      notificationAudio[type].volume = 0.45;
+      notificationAudio[type].playsInline = true;
     }
-    return preloadedGentleAudio;
-  } catch (e) {
+    return notificationAudio[type];
+  } catch {
     return null;
   }
 }
@@ -189,10 +105,9 @@ function playGentleSynthesizedChime() {
   try {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
+    notificationAudioContext ||= new AudioContextClass();
+    const ctx = notificationAudioContext;
+    if (ctx.state === 'suspended') void ctx.resume();
     const t0 = ctx.currentTime;
     // نغمات ثلاثية متتالية عذبة وناعمة مثل جرس الماريمبا الهادئ (C5 -> E5 -> G5)
     const notes = [
@@ -234,8 +149,7 @@ function playGentleSynthesizedChime() {
       osc1.stop(startTime + dur + 0.1);
       osc2.stop(startTime + dur + 0.1);
     });
-  } catch (err) {
-    // ignore
+  } catch {
   }
 }
 
@@ -245,8 +159,7 @@ if (typeof window !== 'undefined') {
     try {
       const gentleAudio = getAudioInstance();
       if (gentleAudio && typeof gentleAudio.load === 'function') gentleAudio.load();
-    } catch (e) {
-      // ignore
+    } catch {
     }
     window.removeEventListener('click', unlockAudioPipeline, true);
     window.removeEventListener('touchstart', unlockAudioPipeline, true);
@@ -259,11 +172,12 @@ if (typeof window !== 'undefined') {
  * تشغيل نغمة التنبيه الموحدة الهادئة (للأذان وبقية العبادات معاً)
  * صوت روحاني جميل وهادئ غير مزعج نهائياً
  */
-export function playNotificationTone(_type = 'gentle') {
+export function playNotificationTone(type = 'gentle') {
   if (typeof window === 'undefined') return;
 
   try {
-    const cached = getAudioInstance();
+    const audioType = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'adhan'].includes(type) ? 'adhan' : 'gentle';
+    const cached = getAudioInstance(audioType);
     if (cached) {
       cached.currentTime = 0;
       cached.volume = 0.45;
@@ -271,11 +185,11 @@ export function playNotificationTone(_type = 'gentle') {
       if (playPromise !== undefined && typeof playPromise.catch === 'function') {
         playPromise.catch(() => {
           try {
-            const fresh = new Audio('/audio/gentle_notification.wav');
+            const fresh = new Audio(audioType === 'adhan' ? HUSSARY_ADHAN_AUDIO_DATA_URI : '/audio/gentle_notification.wav');
             fresh.volume = 0.45;
             fresh.playsInline = true;
             fresh.play().catch(() => playGentleSynthesizedChime());
-          } catch (e) {
+          } catch {
             playGentleSynthesizedChime();
           }
         });
@@ -283,11 +197,11 @@ export function playNotificationTone(_type = 'gentle') {
       return;
     }
 
-    const fresh = new Audio('/audio/gentle_notification.wav');
+    const fresh = new Audio(audioType === 'adhan' ? HUSSARY_ADHAN_AUDIO_DATA_URI : '/audio/gentle_notification.wav');
     fresh.volume = 0.45;
     fresh.playsInline = true;
     fresh.play().catch(() => playGentleSynthesizedChime());
-  } catch (err) {
+  } catch {
     playGentleSynthesizedChime();
   }
 }
@@ -319,8 +233,6 @@ export function checkAndTriggerDueNotifications(settings, triggeredMap = {}, onV
 
   for (const item of items) {
     const itemConfig = settings[item.key];
-    const isPrayer = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].includes(item.key);
-    if (isPrayer && settings.prayerTimesDate !== todayKey) continue;
     const isEnabled = itemConfig?.enabled ?? true;
     const targetTime = itemConfig?.time || item.fallback;
 
@@ -333,8 +245,8 @@ export function checkAndTriggerDueNotifications(settings, triggeredMap = {}, onV
       const title = itemConfig?.title || item.title;
       const body = itemConfig?.body || item.body;
 
-      sendLocalNotification(title, body, triggerId);
-      playNotificationTone(item.key);
+      void sendLocalNotification(title, body, triggerId);
+      playNotificationTone(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].includes(item.key) ? 'adhan' : 'gentle');
 
       if (typeof onVisualAlert === 'function') {
         onVisualAlert({
@@ -349,17 +261,4 @@ export function checkAndTriggerDueNotifications(settings, triggeredMap = {}, onV
   }
 
   return updatedMap;
-}
-
-/**
- * دالة لاختبار إشعار يخرج للموبايل بعد 5 ثوانٍ
- * تتيح للمستخدم الضغط على "تجربة"، ثم قفل شاشة الهاتف فوراً ليرى الإشعار يضيء الشاشة من الخارج
- */
-export function scheduleTestNotification() {
-  setTimeout(() => {
-    sendLocalNotification(
-      'تنبيه تجريبي من مُتَابِـع 🕌',
-      'نجاح الاتصال! هذا الإشعار يظهر على شاشة قفل الموبايل وخارج التطبيق بنجاح.'
-    );
-  }, 5000);
 }

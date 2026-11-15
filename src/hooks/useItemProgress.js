@@ -15,7 +15,6 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { enqueueOfflineAction, getOfflineQueue, removeOfflineAction } from '../lib/offlineSync.js';
 import { settleOrTimeout } from '../lib/async.js';
 
-export const STARTER_PLAYLIST_ITEMS = [];
 
 function getProgressCacheKey(uid, activityId) {
   return `mutabi_item_progress_${uid}_${activityId}`;

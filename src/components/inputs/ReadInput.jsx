@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { TOTAL_PAGES } from '../../data/quran.js';
 import { BookOpen, Check, AlertCircle, RotateCcw, Moon } from 'lucide-react';
 import { QuranReaderModal } from '../QuranReaderModal.jsx';
@@ -7,6 +7,7 @@ export function ReadInput({
   currentLog,
   khatmaStats,
   onSave,
+  onLogPagesRead,
   onReset,
   onClose,
   dailyTarget = 4,
@@ -39,16 +40,23 @@ export function ReadInput({
       setError('صفحة البداية يجب أن تسبق صفحة النهاية');
       return;
     }
+    if (entryMode === 'range' && (fromPage < 1 || toPage > TOTAL_PAGES)) {
+      setError(`يجب أن تكون الصفحات بين 1 و${TOTAL_PAGES}`);
+      return;
+    }
+    if (entryMode === 'count' && (pagesCount < 1 || pagesCount > TOTAL_PAGES)) {
+      setError(`عدد الصفحات يجب أن يكون بين 1 و${TOTAL_PAGES}`);
+      return;
+    }
 
     setSaving(true);
     try {
       const isCompleted = effectivePages >= (dailyTarget || 1);
-      await onSave(
-        effectivePages,
-        isCompleted,
-        entryMode === 'range' ? { fromPage, toPage } : {},
-        note.trim()
-      );
+      const details = {
+        ...currentLog?.details,
+        ...(entryMode === 'range' ? { fromPage, toPage } : {}),
+      };
+      await onSave(effectivePages, isCompleted, details, note.trim());
       onClose();
     } catch (err) {
       setError(err?.message || 'حدث خطأ أثناء الحفظ');
@@ -95,11 +103,17 @@ export function ReadInput({
         isOpen={quranReaderOpen}
         onClose={() => setQuranReaderOpen(false)}
         initialSurahNumber={1}
-        onLogPagesRead={(surah) => {
-          setEntryMode('range');
+        onLogPagesRead={async (surah) => {
+          setEntryMode('count');
           setFromPage(surah.startPage);
           setToPage(surah.startPage);
           setNote(`قراءة الصفحة ${surah.startPage} من سورة ${surah.name}`);
+          try {
+            const result = await onLogPagesRead?.(surah);
+            if (result?.amount) setPagesCount(result.amount);
+          } catch (error) {
+            setError(error?.message || 'تعذر تسجيل الصفحة');
+          }
         }}
       />
 

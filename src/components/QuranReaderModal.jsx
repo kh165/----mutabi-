@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { SURAHS, TOTAL_PAGES } from '../data/quran.js';
 import { getSurahAyahs, getSurahTafseer } from '../data/quranTexts.js';
@@ -36,7 +36,6 @@ import {
 const SHOW_PLAYING_TINT = false;
 
 // مفتاح حفظ حالة "المصحف مفتوح" لإعادة فتحه بعد الريلود (يقرأه Shell.jsx)
-const QURAN_OPEN_KEY = 'mutabi_quran_open';
 
 function getSurahForPage(pageNumber) {
   return SURAHS.reduce(
@@ -268,25 +267,7 @@ export function QuranReaderModal({
     };
   }, []);
 
-  // نحفظ أن المصحف مفتوح، فلو عملت ريلود يتفتح تاني في نفس المكان
-  useEffect(() => {
-    if (!isOpen) return;
-    try {
-      localStorage.setItem(QURAN_OPEN_KEY, '1');
-    } catch {
-      // ignore
-    }
-  }, [isOpen]);
-
-  // الإغلاق اليدوي فقط (زر X أو Esc) هو اللي يمسح حالة "مفتوح"
-  const handleClose = () => {
-    try {
-      localStorage.removeItem(QURAN_OPEN_KEY);
-    } catch {
-      // ignore
-    }
-    onClose?.();
-  };
+  const handleClose = () => onClose?.();
 
   // Debounced search via Quran Foundation API
   useEffect(() => {
@@ -1378,7 +1359,7 @@ export function QuranReaderModal({
                               <p className={`text-[11px] mt-0.5 line-clamp-1 ${isSelected ? 'text-emerald-100' : themes.subText}`}>
                                 {font.description}
                               </p>
-                              <p className={`text-base mt-1 ${font.className} ${isSelected ? 'text-white' : themes.drawerHighlight}`}>
+                              <p className={`text-base mt-1 ${isSelected ? 'text-white' : themes.drawerHighlight}`} style={{ fontFamily: font.fontFamily }}>
                                 بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
                               </p>
                             </div>
@@ -1457,7 +1438,7 @@ export function QuranReaderModal({
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed top-28 sm:top-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-slate-900/90 text-white text-xs sm:text-sm font-bold shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 border border-white/10">
+        <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-2xl bg-slate-900/90 text-white text-xs sm:text-sm font-bold shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 border border-white/10">
           <BookmarkCheck className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
@@ -1628,7 +1609,7 @@ export function QuranReaderModal({
                 {/* Basmalah (For all surahs except At-Tawbah and Al-Fatihah) */}
                 {selectedSurah !== 1 && selectedSurah !== 9 && (
                   <div className="pt-2">
-                    <p className={`text-2xl sm:text-3xl font-bold ${currentFont.className} ${themes.bismillahColor}`}>
+                    <p className={`text-2xl sm:text-3xl font-bold ${themes.bismillahColor}`} style={{ fontFamily: currentFont.fontFamily }}>
                       بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
                     </p>
                   </div>
@@ -1675,7 +1656,7 @@ export function QuranReaderModal({
                         </button>
                       </div>
                       <div
-                        className={`text-right font-normal tracking-normal ${currentFont.className} ${themes.verseTextColor} ${fontStyle} rounded-2xl px-3 py-2 leading-relaxed`}
+                        className={`text-right font-normal tracking-normal ${themes.verseTextColor} ${fontStyle} rounded-2xl px-3 py-2 leading-relaxed`}
                         style={{
                           fontFamily: currentFont.fontFamily,
                           textAlignLast: 'right',
@@ -1954,7 +1935,7 @@ export function QuranReaderModal({
               {/* Ayah Scripture in Ornamental Box using Selected Uthmani Font */}
               <div className={`p-4 sm:p-5 rounded-2xl border text-center space-y-2 ${themes.drawerCard}`}>
                 <p
-                  className={`text-xl sm:text-2xl font-bold leading-relaxed ${currentFont.className} ${themes.drawerHighlight}`}
+                  className={`text-xl sm:text-2xl font-bold leading-relaxed ${themes.drawerHighlight}`}
                   style={{ fontFamily: currentFont.fontFamily }}
                 >
                   ﴿ {selectedAyahForTafseer.text} ﴾
@@ -2264,7 +2245,7 @@ export function QuranReaderModal({
                                 <span className={`text-[10px] ${themes.subText}`}>اضغط للانتقال للآية</span>
                               </div>
                               <p
-                                className={`text-sm sm:text-base leading-relaxed ${currentFont.className} ${themes.drawerHighlight}`}
+                                className={`text-sm sm:text-base leading-relaxed ${themes.drawerHighlight}`}
                                 style={{ fontFamily: currentFont.fontFamily }}
                               >
                                 ﴿ {v.text} ﴾

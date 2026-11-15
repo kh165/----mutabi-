@@ -1,6 +1,5 @@
-import React from 'react';
 
-export function Logo({ className = "h-9 sm:h-10", showBadge = true }) {
+export function Logo({ className = "h-9 sm:h-10" }) {
   return (
     <div className="flex items-center gap-2 select-none group">
       <div className="relative flex items-center justify-center p-1 rounded-2xl bg-white/90 dark:bg-slate-800/90 shadow-2xs border border-emerald-100 dark:border-slate-700/60 transition-transform group-hover:scale-105">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   Sunrise,
   Sun,
@@ -17,11 +17,11 @@ import {
 } from 'lucide-react';
 
 export const PRAYERS_CONFIG = [
-  { id: 'fajr', title: 'صلاة الفجر', icon: Sunrise, color: '#38bdf8', bgLight: '#f0f9ff', timeEst: '05:00' },
-  { id: 'dhuhr', title: 'صلاة الظهر', icon: Sun, color: '#f59e0b', bgLight: '#fffbeb', timeEst: '12:00' },
-  { id: 'asr', title: 'صلاة العصر', icon: SunMedium, color: '#fb923c', bgLight: '#fff7ed', timeEst: '15:15' },
-  { id: 'maghrib', title: 'صلاة المغرب', icon: Sunset, color: '#ec4899', bgLight: '#fdf2f8', timeEst: '17:45' },
-  { id: 'isha', title: 'صلاة العشاء', icon: Moon, color: '#818cf8', bgLight: '#eef2ff', timeEst: '19:15' },
+  { id: 'fajr', title: 'صلاة الفجر', icon: Sunrise, color: '#38bdf8', bgLight: '#f0f9ff' },
+  { id: 'dhuhr', title: 'صلاة الظهر', icon: Sun, color: '#f59e0b', bgLight: '#fffbeb' },
+  { id: 'asr', title: 'صلاة العصر', icon: SunMedium, color: '#fb923c', bgLight: '#fff7ed' },
+  { id: 'maghrib', title: 'صلاة المغرب', icon: Sunset, color: '#ec4899', bgLight: '#fdf2f8' },
+  { id: 'isha', title: 'صلاة العشاء', icon: Moon, color: '#818cf8', bgLight: '#eef2ff' },
 ];
 
 export function PrayersTrackerCard({

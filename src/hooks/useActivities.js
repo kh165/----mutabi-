@@ -170,7 +170,7 @@ function getCachedActivities(uid, fetchAll) {
 export function useActivities(fetchAll = false) {
   const { user, isAdmin } = useAuth();
   const [activities, setActivities] = useState(() => getCachedActivities(user?.uid, fetchAll));
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [usingPresets, setUsingPresets] = useState(false);
   const usingPresetsRef = useRef(false);
   const isAdminRef = useRef(isAdmin);

@@ -83,6 +83,14 @@ service cloud.firestore {
         allow delete: if isOwner(uid) && notDisabled();
       }
 
+      match /fcmTokens/{tokenId} {
+        allow get, list: if isOwner(uid);
+        allow create, update: if isOwner(uid) && notDisabled()
+          && request.resource.data.keys().hasOnly(['token', 'updatedAt', 'createdAt', 'platform', 'timezone', 'userAgent'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() <= 4096;
+        allow delete: if isOwner(uid);
+      }
       match /hadithProgress/{progressId} {
         allow get, list: if isOwner(uid) || canMonitorUser(uid);
         allow create, update: if isOwner(uid)
@@ -150,19 +158,6 @@ service cloud.firestore {
       );
     }
 
-    // ---------- todos ----------
-    match /todos/{id} {
-      allow read, list: if signedIn() && resource.data.uid == request.auth.uid;
-      allow create: if signedIn() && notDisabled() 
-                    && request.resource.data.uid == request.auth.uid;
-      allow update: if signedIn() && notDisabled() 
-                    && resource.data.uid == request.auth.uid
-                    && request.resource.data.uid == request.auth.uid;
-      allow delete: if signedIn() && (
-        resource.data.uid == request.auth.uid ||
-        canMonitorUser(resource.data.uid)
-      );
-    }
 
     // ---------- itemProgress ----------
     match /itemProgress/{id} {

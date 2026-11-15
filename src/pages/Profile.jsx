@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { useLogs } from '../hooks/useLogs.js';
@@ -44,7 +44,7 @@ const TIMEZONES = [
 
 export function Profile() {
   const { user, userDoc, logout, isAdmin, updateUserDoc } = useAuth();
-  const { theme, setTheme, isDark } = useTheme();
+  const { setTheme, isDark } = useTheme();
   const { logs } = useLogs();
   const { activities } = useActivities(true);
 
@@ -66,15 +66,14 @@ export function Profile() {
         setError('يرجى السماح بإشعارات المتصفح حتى تتمكن من استلام التنبيهات');
         return;
       }
+      setNotifications((prev) => ({ ...prev, enabled: true }));
       try {
         const token = await registerFcmToken(user, timezone);
         if (!token) throw new Error('FCM token registration unavailable');
       } catch (err) {
         console.error('Failed to register push token:', err);
-        setError('تعذر تفعيل إشعارات Push. يرجى المحاولة مجددًا');
-        return;
+        setError('تم تفعيل التنبيهات المحلية، لكن تعذر إعداد الإشعارات السحابية.');
       }
-      setNotifications((prev) => ({ ...prev, enabled: true }));
       sendLocalNotification(
         'تم تفعيل تنبيهات مُتَابِـع 🕌',
         'تعمل التنبيهات أثناء فتح التطبيق أو في الخلفية القريبة، حسب دعم المتصفح وإذن الإشعارات'
@@ -135,7 +134,7 @@ export function Profile() {
       }
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);
-    } catch (err) {
+    } catch {
       setError('حدث خطأ أثناء حفظ التعديلات');
     } finally {
       setSaving(false);

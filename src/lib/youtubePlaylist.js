@@ -5,7 +5,6 @@
  * 3) دعم إضافة مفتاح اختياري VITE_YOUTUBE_API_KEY لو رغب المستخدم
  */
 
-const YT_API_KEY = (import.meta.env && import.meta.env.VITE_YOUTUBE_API_KEY) || '';
 
 export function extractPlaylistId(url) {
   if (!url) return null;
@@ -38,12 +37,6 @@ export function extractVideoId(url) {
 /* helpers                                                           */
 /* ---------------------------------------------------------------- */
 
-function parseISODuration(iso) {
-  const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(iso || '');
-  if (!m) return 0;
-  const [, d = 0, h = 0, mi = 0, s = 0] = m;
-  return Number(d) * 86400 + Number(h) * 3600 + Number(mi) * 60 + Number(s);
-}
 
 const toMinutes = (seconds) => Math.max(1, Math.round((seconds || 0) / 60));
 
@@ -265,7 +258,7 @@ export async function fetchPlaylistDetails(playlistUrl, fallbackTitle = '', onPr
     } finally {
       destroy();
     }
-  } catch (err) {
+  } catch {
     // Fallback title via oEmbed
     const title = (await fetchPlaylistTitleViaOEmbed(playlistId)) || fallbackTitle || 'سلسلة مرئية';
     return {

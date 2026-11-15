@@ -1,10 +1,11 @@
-import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { ThemeProvider } from './context/ThemeContext.jsx';
 import { Shell } from './components/layout/Shell.jsx';
 import { AuthPage } from './pages/auth/AuthPage.jsx';
 import { useActivities } from './hooks/useActivities.js';
 import { useLogs } from './hooks/useLogs.js';
+import { useLogReadPage } from './hooks/useLogReadPage.js';
 import { calculateStreaks } from './lib/stats.js';
 import { calculateUserPoints } from './lib/points.js';
 import { getTodayDateString } from './lib/dates.js';
@@ -58,6 +59,7 @@ function MainApp() {
   const [adhkarInitialCategory, setAdhkarInitialCategory] = useState('morning');
   const [offlineSetupOpen, setOfflineSetupOpen] = useState(false);
   const [activeVisualAlert, setActiveVisualAlert] = useState(null);
+  const [readerToast, setReaderToast] = useState(null);
   const triggeredMapRef = useRef({});
   const refreshingPrayerTimesRef = useRef(null);
 
@@ -221,9 +223,25 @@ function MainApp() {
   }, [user, userDoc?.notifications]);
 
   const todayStr = getTodayDateString(userDoc?.timezone);
-  const streaks = calculateStreaks(logs, todayStr);
+  const recordReadPage = useLogReadPage({ activities, logs, saveLog, date: todayStr, customTargets: userDoc?.customTargets });
+  const handleLogPagesRead = async (surah) => {
+    try {
+      const result = await recordReadPage(surah);
+      setReaderToast(`تم تسجيل الصفحة ${result.page} بنجاح`);
+      return result;
+    } catch (error) {
+      setReaderToast('تعذر تسجيل الصفحة، حاول مرة أخرى');
+      throw error;
+    }
+  };
+  useEffect(() => {
+    if (!readerToast) return undefined;
+    const timer = window.setTimeout(() => setReaderToast(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [readerToast]);
+  const streaks = useMemo(() => calculateStreaks(logs, todayStr), [logs, todayStr]);
   const currentStreak = streaks.currentStreak;
-  const userPoints = calculateUserPoints(logs, activities, streaks);
+  const userPoints = useMemo(() => calculateUserPoints(logs, activities, streaks), [logs, activities, streaks]);
 
   const handleRecordPrayerFromAlert = async (prayerKey) => {
     try {
@@ -267,16 +285,6 @@ function MainApp() {
         `تسجيل صلاة ${getPrayerArabicName(prayerKey)} من التنبيه`
       );
 
-      if (updateUserDoc) {
-        await updateUserDoc({
-          lastPrayerUpdate: {
-            date: todayStr,
-            performedCount,
-            isCompleted: performedCount === 5,
-            updatedAt: new Date().toISOString(),
-          },
-        });
-      }
     } catch (e) {
       console.error('Error logging prayer from banner', e);
     }
@@ -362,6 +370,7 @@ function MainApp() {
 
   return (
     <>
+      {readerToast && <div role="status" className="fixed top-4 left-1/2 -translate-x-1/2 z-[120] rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white shadow-xl">{readerToast}</div>}
       <PrayerAlertBanner
         alert={activeVisualAlert}
         onDismiss={() => setActiveVisualAlert(null)}
@@ -374,6 +383,7 @@ function MainApp() {
         totalPoints={userPoints.totalPoints}
         showOfflineSetup={offlineSetupOpen}
         onOfflineSetupDismiss={dismissOfflineSetup}
+        onLogPagesRead={handleLogPagesRead}
       >
         <Suspense
           fallback={
@@ -411,6 +421,7 @@ function MainApp() {
                 onNavigateToHadith={() => handleSelectTab('hadith')}
                 onNavigateToTodos={() => handleSelectTab('todos')}
                 onNavigateToAdhkar={handleNavigateToAdhkar}
+                onLogPagesRead={handleLogPagesRead}
               />
             )
           )}

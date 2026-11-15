@@ -1,5 +1,5 @@
 import { settleOrTimeout } from '../lib/async.js';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import confetti from 'canvas-confetti';
 import {
   collection,
@@ -29,8 +29,6 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
-  Cloud,
-  CloudCheck,
   RefreshCw,
 } from 'lucide-react';
 import { db } from '../firebase.js';
@@ -92,7 +90,7 @@ function getPendingTodoList(uid) {
 // 2. Custom Hook: useTodos (Real-time Firestore Sync)
 // ==========================================
 export function useTodos() {
-  const { user, userDoc } = useAuth();
+  const { user } = useAuth();
   const [todos, setTodos] = useState(() => getLocalTodos(user?.uid));
   const [loading, setLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState('syncing'); // 'synced' | 'syncing' | 'error'
@@ -155,11 +153,9 @@ export function useTodos() {
       },
       (err) => {
         if (!isSubscribed) return;
-        console.warn('Firestore subcollection listener error, attempting userDoc fallback:', err);
-
-        // Fallback: Check if todos are saved in the userDoc in Firestore
+        console.warn('Firestore subcollection listener error:', err);
         const pendingTodos = getPendingTodoList(user.uid);
-        const fallbackTodos = pendingTodos || userDoc?.todosList;
+        const fallbackTodos = pendingTodos || getLocalTodos(user.uid);
         if (Array.isArray(fallbackTodos)) {
           setTodos(fallbackTodos);
           setLocalTodos(user.uid, fallbackTodos);
@@ -177,7 +173,7 @@ export function useTodos() {
       isSubscribed = false;
       unsubscribe();
     };
-  }, [user?.uid, userDoc?.todosList]);
+  }, [user?.uid]);
 
   // Dual-Write helper: Writes to both subcollection AND user document in Firestore
   const syncToFirestore = useCallback(
@@ -188,7 +184,6 @@ export function useTodos() {
 
       setSyncStatus('syncing');
 
-      let userDocSuccess = false;
       let subcollectionSuccess = false;
       let writeError = null;
       const queueTodoChange = () => {
@@ -203,49 +198,31 @@ export function useTodos() {
         setSyncStatus('pending');
         setLastSyncedTime('محفوظ ومؤمّن محلياً (المزامنة تلقائية عند الاتصال)');
       };
-
       if (!navigator.onLine) {
         queueTodoChange();
         return { success: false, pending: true };
       }
-
-      // 1. Primary Cloud Persistence: Backup to user's root document (always permitted for user owner)
       try {
-        const userRef = doc(db, 'users', user.uid);
-        const result = await settleOrTimeout(
-          updateDoc(userRef, {
-            todosList: nextTodos.slice(0, 100),
-            lastTodosSyncAt: new Date().toISOString(),
-          }),
-          4000
-        );
-        userDocSuccess = result !== 'pending';
-      } catch (err) {
-        console.warn('userDoc todos backup note:', err?.message);
-        writeError = err;
-      }
-
-      // 2. Subcollection write /users/{uid}/todos/{todoId}
-      if (specificTodoAction) {
-        try {
+        if (specificTodoAction) {
           const { action, todoId, data } = specificTodoAction;
           const todoRef = doc(db, 'users', user.uid, 'todos', todoId);
           let result;
-          if (action === 'set') {
-            result = await settleOrTimeout(setDoc(todoRef, data), 4000);
-          } else if (action === 'update') {
-            result = await settleOrTimeout(updateDoc(todoRef, data), 4000);
-          } else if (action === 'delete') {
-            result = await settleOrTimeout(deleteDoc(todoRef), 4000);
-          }
+          if (action === 'set') result = await settleOrTimeout(setDoc(todoRef, data), 4000);
+          if (action === 'update') result = await settleOrTimeout(updateDoc(todoRef, data), 4000);
+          if (action === 'delete') result = await settleOrTimeout(deleteDoc(todoRef), 4000);
           subcollectionSuccess = result !== 'pending';
-        } catch (err) {
-          console.warn('subcollection write note:', err?.message);
-          writeError = writeError || err;
+        } else {
+          const writes = await Promise.all(nextTodos.map((todo) => settleOrTimeout(
+            setDoc(doc(db, 'users', user.uid, 'todos', String(todo.id)), todo, { merge: true }),
+            4000,
+          )));
+          subcollectionSuccess = writes.every((result) => result !== 'pending');
         }
+      } catch (err) {
+        console.warn('subcollection write note:', err?.message);
+        writeError = err;
       }
-
-      const allWritesSucceeded = userDocSuccess && (!specificTodoAction || subcollectionSuccess);
+      const allWritesSucceeded = subcollectionSuccess;
       if (allWritesSucceeded) {
         setSyncStatus('synced');
         setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
@@ -919,7 +896,7 @@ function TodoModal({ isOpen, onClose, onSave, initialTodo = null }) {
         subtasks,
       });
       onClose();
-    } catch (_) {} finally {
+    } catch {} finally {
       setSubmitting(false);
     }
   };
@@ -1191,7 +1168,7 @@ function TodoQuickAdd({ onAdd, onOpenFullModal }) {
         priority,
       });
       setTitle('');
-    } catch (_) {} finally {
+    } catch {} finally {
       setLoading(false);
     }
   };
@@ -1268,7 +1245,6 @@ export function TodosPage() {
     loading,
     syncStatus,
     lastSyncedTime,
-    errorMessage,
     forceVerifyCloud,
     addTodo,
     toggleTodo,
@@ -1302,7 +1278,7 @@ export function TodosPage() {
           colors: ['#10b981', '#3b82f6', '#f59e0b', '#ec4899'],
         });
       }
-    } catch (_) {}
+    } catch {}
   };
 
   const handleEdit = (todo) => {

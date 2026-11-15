@@ -45,16 +45,18 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          importScripts: ['/notification-handler.js'],
+          importScripts: ['/notification-handler.js', '/fcm-sw.js'],
           clientsClaim: true,
           skipWaiting: false,
           cleanupOutdatedCaches: true,
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,webmanifest,json}'],
+          globIgnores: ['**/books/**', '**/manus-routes.json', '**/audio/*.zip', '**/*.json'],
           // أي تنقل داخل التطبيق يرجع لـ index.html (ضروري للأوفلاين)
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/__/],
           runtimeCaching: [
+            { urlPattern: ({ url }) => url.origin === self.location.origin && (url.pathname.startsWith('/books/')), handler: 'CacheFirst', options: { cacheName: 'mutabi-static-data', expiration: { maxEntries: 100, maxAgeSeconds: YEAR }, cacheableResponse: { statuses: [0, 200] } } },
             {
               // نصوص القرآن والتفسير (نفس اسم الكاش المستخدم في زر التحميل)
               urlPattern: /^https:\/\/(api\.alquran\.cloud|quranenc\.com|api\.quran\.com)\/.*/i,

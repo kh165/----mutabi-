@@ -13,7 +13,6 @@ import { MORNING_ADHKAR, EVENING_ADHKAR } from '../data/adhkar.js';
 import { FORTY_HADITHS } from '../data/fortyHadith.js';
 import { BUKHARI_BOOKS, MUSLIM_BOOKS } from '../data/hadithCollections.js';
 import { fetchBookHadiths } from './hadithService.js';
-import { INITIAL_PRESETS } from '../hooks/useActivities.js';
 import { settleOrTimeout } from './async.js';
 
 const QUEUE_STORAGE_KEY = 'mutabi_offline_queue';
@@ -245,52 +244,21 @@ async function performOfflineSync() {
       } else if (action.type === 'SAVE_TODO') {
         const { uid, todoId, data, todosList } = action;
         if (todoId && data) {
-          await waitForCloudWrite(
-            setDoc(doc(db, 'users', uid, 'todos', todoId), data, { merge: true }),
-          );
-        }
-        if (Array.isArray(todosList)) {
-          await waitForCloudWrite(
-            setDoc(
-              doc(db, 'users', uid),
-              {
-                todosList: todosList.slice(0, 100),
-                lastTodosSyncAt: new Date().toISOString(),
-              },
-              { merge: true },
-            ),
-          );
+          await waitForCloudWrite(setDoc(doc(db, 'users', uid, 'todos', todoId), data, { merge: true }));
+        } else if (Array.isArray(todosList)) {
+          for (const todo of todosList) {
+            await waitForCloudWrite(setDoc(doc(db, 'users', uid, 'todos', String(todo.id)), todo, { merge: true }));
+          }
         }
       } else if (action.type === 'DELETE_TODO') {
-        const { uid, todoId, todosList } = action;
-        if (todoId) {
-          await waitForCloudWrite(deleteDoc(doc(db, 'users', uid, 'todos', todoId)));
-        }
-        if (Array.isArray(todosList)) {
-          await waitForCloudWrite(
-            setDoc(
-              doc(db, 'users', uid),
-              {
-                todosList: todosList.slice(0, 100),
-                lastTodosSyncAt: new Date().toISOString(),
-              },
-              { merge: true },
-            ),
-          );
-        }
+        const { uid, todoId } = action;
+        if (todoId) await waitForCloudWrite(deleteDoc(doc(db, 'users', uid, 'todos', todoId)));
       } else if (action.type === 'SYNC_TODOS') {
         const { uid, todosList } = action;
         if (Array.isArray(todosList)) {
-          await waitForCloudWrite(
-            setDoc(
-              doc(db, 'users', uid),
-              {
-                todosList: todosList.slice(0, 100),
-                lastTodosSyncAt: new Date().toISOString(),
-              },
-              { merge: true },
-            ),
-          );
+          for (const todo of todosList) {
+            await waitForCloudWrite(setDoc(doc(db, 'users', uid, 'todos', String(todo.id)), todo, { merge: true }));
+          }
         }
       } else if (action.type === 'SAVE_ADHKAR') {
         const { uid, dayKey, categoryId, dhikrId, count } = action;
@@ -534,7 +502,7 @@ async function cacheResource(cache, url) {
   try {
     try {
       response = await fetch(url, { signal: controller.signal, mode: 'cors' });
-    } catch (corsError) {
+    } catch {
       // بعض مصادر الوسائط لا تعرض CORS؛ نستخدم opaque كحل احتياطي.
       response = await fetch(url, { signal: controller.signal, mode: 'no-cors' });
     }
@@ -604,7 +572,6 @@ export async function downloadOfflinePackage(tier = 'basic', onProgress) {
             ...MUSLIM_BOOKS.map((book) => ({ collection: 'muslim', id: book.id })),
           ]
         : [];
-    const totalAyahs = SURAHS.reduce((total, surah) => total + surah.ayahsCount, 0);
     const includeAudio = OFFLINE_TIERS[tier] >= OFFLINE_TIERS.complete;
     const includePages = OFFLINE_TIERS[tier] >= OFFLINE_TIERS.reading;
     // الحزمة الكاملة تحفظ ملف كل سورة فقط؛ لا تنزّل ملفًا لكل آية.
@@ -634,20 +601,6 @@ export async function downloadOfflinePackage(tier = 'basic', onProgress) {
       await ensureServiceWorkerControlsPage();
       await navigator.storage?.persist?.();
       saveOfflinePackageStatus(packageStatus, onProgress);
-      localStorage.setItem('mutabi_offline_surahs_meta', JSON.stringify(SURAHS));
-      localStorage.setItem(
-        'mutabi_offline_adhkar',
-        JSON.stringify({ morning: MORNING_ADHKAR, evening: EVENING_ADHKAR }),
-      );
-      localStorage.setItem('mutabi_offline_hadith', JSON.stringify(FORTY_HADITHS));
-      if (!localStorage.getItem('mutabi_activities_cache')) {
-        const presets = INITIAL_PRESETS.map((preset, index) => ({
-          ...preset,
-          id: preset.id || `preset_${index + 1}`,
-        }));
-        localStorage.setItem('mutabi_activities_cache', JSON.stringify(presets));
-      }
-
       for (let index = 0; index < SURAHS.length; index++) {
         await getChapterVerses(index + 1);
         completeOne(`تنزيل نص القرآن وبيانات الصفحات (${index + 1}/${SURAHS.length})`);

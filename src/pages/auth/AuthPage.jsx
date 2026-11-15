@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import {
-  Lock,
   Mail,
   User,
   AlertCircle,
@@ -66,7 +65,7 @@ export function AuthPage() {
       ) {
         setAccountNotFound(true);
       } else {
-        setLocalError(err?.message || 'حدث خطأ أثناء المعالجة');
+        setLocalError('تعذر إتمام العملية، يرجى التحقق من البيانات والمحاولة مرة أخرى');
       }
     } finally {
       setLoading(false);
@@ -78,8 +77,9 @@ export function AuthPage() {
     setLoading(true);
     try {
       await signInWithGoogle();
-    } catch (err) {
-      setLocalError(err?.message || 'تعذر تسجيل الدخول بحساب Google');
+    } catch {
+      // AuthContext provides a localized error for this operation.
+      setLocalError(null);
     } finally {
       setLoading(false);
     }
@@ -300,7 +300,7 @@ export function AuthPage() {
           {(localError || authError) && !accountNotFound && (
             <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{localError || authError}</span>
+              <span>{authError || localError}</span>
             </div>
           )}
 

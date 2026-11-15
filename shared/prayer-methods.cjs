@@ -1,32 +1,46 @@
-const TIMEZONE_METHODS = Object.freeze({
-  'Africa/Cairo': 5,
-  'Asia/Riyadh': 4,
-  'Asia/Dubai': 16,
-  'Asia/Amman': 23,
-  'Africa/Casablanca': 21,
-  'Europe/London': 3,
-  'America/New_York': 2,
-});
-
-const METHOD_NAMES = Object.freeze({
-  2: 'NorthAmerica',
+const METHOD_NAMES = {
+  0: 'Jafari',
+  1: 'Karachi',
+  2: 'ISNA',
   3: 'MoonsightingCommittee',
   4: 'UmmAlQura',
   5: 'Egyptian',
+  7: 'InstituteOfGeophysics',
+  8: 'GulfRegion',
+  9: 'Kuwait',
+  10: 'Qatar',
+  11: 'Singapore',
+  12: 'UOfT',
+  13: 'Tehran',
+  14: 'Turkey',
+  15: 'Other',
   16: 'Dubai',
+  17: 'MoonsightingCommittee',
+  18: 'Morocco',
+  19: 'Portugal',
+  20: 'France',
   21: 'MuslimWorldLeague',
+  22: 'MoonsightingCommittee',
   23: 'MuslimWorldLeague',
-});
-
-// Aladhan's API uses 15 for Moonsighting Committee; its code 3 means MWL.
-const ALADHAN_API_METHODS = Object.freeze({ 3: 15 });
-
+};
+const ALADHAN_API_METHODS = { 3: 15, 21: 3, 23: 3 };
+const TIMEZONE_METHODS = {
+  'Africa/Cairo': 5,
+  'Asia/Riyadh': 4,
+  'Asia/Kuwait': 9,
+  'Asia/Qatar': 10,
+  'Asia/Dubai': 16,
+  'Asia/Singapore': 11,
+  'Asia/Karachi': 1,
+  'Europe/Istanbul': 14,
+  'America/New_York': 2,
+  'America/Toronto': 2,
+};
 function resolvePrayerMethod(method, timezone) {
-  if (method === 'auto' || method === undefined || method === null || method === '') {
-    return TIMEZONE_METHODS[timezone] || 5;
+  if (method !== undefined && method !== null && method !== '' && method !== 'auto') {
+    const explicit = Number(method);
+    return Number.isInteger(explicit) && METHOD_NAMES[explicit] ? explicit : 5;
   }
-  const numericMethod = Number(method);
-  return METHOD_NAMES[numericMethod] ? numericMethod : 5;
+  return TIMEZONE_METHODS[timezone] || 5;
 }
-
-module.exports = { TIMEZONE_METHODS, METHOD_NAMES, ALADHAN_API_METHODS, resolvePrayerMethod };
+module.exports = { METHOD_NAMES, ALADHAN_API_METHODS, TIMEZONE_METHODS, resolvePrayerMethod };

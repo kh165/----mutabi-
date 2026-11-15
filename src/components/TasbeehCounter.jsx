@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import {
   RotateCcw,
@@ -194,7 +194,7 @@ export function TasbeehCounter({
   return (
     <div className="space-y-6 text-right">
       {saveError && (
-        <div className="p-3 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-xs text-red-700 dark:text-red-300">
+        <div role="alert" className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md p-3 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/95 text-xs text-red-700 dark:text-red-300 shadow-xl">
           {saveError}
         </div>
       )}
@@ -322,7 +322,7 @@ export function TasbeehCounter({
                         setCustomDhikr(e.target.value);
                         setIsCustom(true);
                       }}
-                      className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                      className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-base sm:text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                     />
                     <button
                       type="button"

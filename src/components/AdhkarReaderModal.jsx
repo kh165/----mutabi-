@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -55,9 +55,9 @@ export function AdhkarReaderModal({
   const [counts, setCounts] = useState({});
   const [copiedId, setCopiedId] = useState(null);
   const [fontScale, setFontScale] = useState(2); // 1 to 4
-  const [loadingProgress, setLoadingProgress] = useState(false);
+  const [, setLoadingProgress] = useState(false);
   const [progressSyncError, setProgressSyncError] = useState(null);
-  const [progressSyncState, setProgressSyncState] = useState('idle');
+  const [, setProgressSyncState] = useState('idle');
   const countsRef = useRef({});
 
   useEffect(() => {
@@ -620,7 +620,7 @@ export function AdhkarReaderModal({
               <button
                 type="button"
                 onClick={() => {
-                  onCompleteCategory(activeCategory.title);
+                  onCompleteCategory(activeCategory.title, countsRef.current);
                   if (!fullPage) onClose?.();
                 }}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"

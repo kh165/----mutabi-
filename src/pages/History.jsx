@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useActivities } from '../hooks/useActivities.js';
 import { useLogs } from '../hooks/useLogs.js';
 import { formatArabicDate } from '../lib/dates.js';
@@ -10,8 +10,6 @@ import {
   BookOpen,
   Video,
   CheckCircle2,
-  Calendar,
-  Moon,
 } from 'lucide-react';
 
 export function History() {

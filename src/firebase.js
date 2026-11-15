@@ -10,7 +10,6 @@ import {
 import {
   doc,
   getDoc,
-  getDocFromServer,
   setDoc,
   deleteDoc,
   updateDoc,
@@ -62,7 +61,6 @@ export const auth = createAuth();
 export {
   doc,
   getDoc,
-  getDocFromServer,
   setDoc,
   deleteDoc,
   updateDoc,
@@ -109,13 +107,3 @@ export function handleFirestoreError(error, operationType, path) {
   console.error('Data Operation Info:', JSON.stringify(errInfo));
   return new Error(errInfo.error);
 }
-
-export function testConnection() {
-  setTimeout(async () => {
-    try {
-      await getDocFromServer(doc(db, 'test', 'connection'));
-    } catch (_) {}
-  }, 1000);
-}
-
-if (typeof navigator !== 'undefined' && navigator.onLine) testConnection();

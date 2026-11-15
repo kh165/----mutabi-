@@ -9,6 +9,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase.js';
+import { normalizeHadithId } from '../lib/hadithProgressId.js';
 
 function progressDocId(collectionId, hadithId) {
   return encodeURIComponent(`${collectionId}:${hadithId}`);
@@ -18,9 +19,10 @@ function mapsFromEntries(entries) {
   const read = {};
   const bookmarked = {};
   entries.forEach((entry) => {
-    if (!entry?.hadithId) return;
-    if (entry.read === true) read[entry.hadithId] = true;
-    if (entry.bookmarked === true) bookmarked[entry.hadithId] = true;
+    if (entry?.hadithId == null) return;
+    const hadithId = normalizeHadithId(entry.hadithId);
+    if (entry.read === true) read[hadithId] = true;
+    if (entry.bookmarked === true) bookmarked[hadithId] = true;
   });
   return { read, bookmarked };
 }
@@ -111,6 +113,7 @@ export function useHadithProgress(uid, legacyProgress) {
   const legacyMaps = mapsFromEntries(legacyEntries(legacyProgress));
 
   const setHadithProgress = async (collectionId, hadithId, values) => {
+    hadithId = normalizeHadithId(hadithId);
     if (!uid) {
       throw new Error('يجب تسجيل الدخول لحفظ تقدم الأحاديث.');
     }

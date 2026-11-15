@@ -9,6 +9,15 @@ import {
   RUQYAH_SHARIAH,
   SLEEP_ADHKAR,
 } from './adhkarSupplement.js';
+import {
+  FOOD_ETIQUETTE_DUAS,
+  ILLNESS_DUAS,
+  MOSQUE_ADHKAR,
+  SOCIAL_ADHKAR,
+  SUPPLEMENTAL_SLEEP_ADHKAR,
+  TRAVEL_ADHKAR,
+  WIND_DUAS,
+} from './adhkarExpanded.js';
 
 const PROTECTION_ADHKAR = [
   {
@@ -235,12 +244,12 @@ export const ADHKAR_CATEGORIES = [
     id: 'sleep',
     title: 'أذكار النوم والاستيقاظ',
     subtitle: 'أدعية النوم والقيام من الليل',
-    items: SLEEP_ADHKAR,
+    items: [...SLEEP_ADHKAR, ...SUPPLEMENTAL_SLEEP_ADHKAR],
   },
   {
     id: 'relief',
     title: 'أدعية الكرب والهم وقضاء الدين',
-    subtitle: 'أدعية مأثورة للهم والكرب والاستخارة',
+    subtitle: 'أدعية مأثورة للهم والكرب، ويتضمن القسم دعاء الاستخارة الكامل.',
     items: RELIEF_DUAS,
   },
   {
@@ -258,7 +267,43 @@ export const ADHKAR_CATEGORIES = [
   {
     id: 'daily-life',
     title: 'أذكار وأدعية اليوم والليلة',
-    subtitle: 'أدعية السفر والطعام والمنزل وغيرها',
+    subtitle: 'أذكار السفر والمنزل والمسجد والمطر في مواقف اليوم والليلة',
     items: DAILY_LIFE_DUAS,
+  },
+  {
+    id: 'food',
+    title: 'أذكار الطعام واللباس والخلاء',
+    subtitle: 'التسمية والحمد ودعاء الثوب الجديد ودخول الخلاء وخروجه؛ لم يثبت ذكر خاص للشرب وحده في المصادر المراجعة',
+    items: FOOD_ETIQUETTE_DUAS,
+  },
+  {
+    id: 'social',
+    title: 'آداب المجالس والتحية والعطاس',
+    subtitle: 'أذكار وآداب ثابتة مع بيان موضع كل صيغة',
+    items: SOCIAL_ADHKAR,
+  },
+  {
+    id: 'health',
+    title: 'عيادة المريض وأدعية الشفاء',
+    subtitle: 'ما يقال للمريض وما ورد عند زيارته',
+    items: ILLNESS_DUAS,
+  },
+  {
+    id: 'wind',
+    title: 'الدعاء عند هبوب الريح',
+    subtitle: 'دعاء صحيح دون نسبة أثر الرعد إلى النبي ﷺ',
+    items: WIND_DUAS,
+  },
+  {
+    id: 'travel',
+    title: 'الرجوع من السفر والنزول بمكان',
+    subtitle: 'أذكار ثابتة تكمّل دعاء السفر الموجود',
+    items: TRAVEL_ADHKAR,
+  },
+  {
+    id: 'mosque',
+    title: 'أذكار إضافية عند دخول المسجد',
+    subtitle: 'استعاذة واردة غير مكررة مع دعاء الدخول الحالي',
+    items: MOSQUE_ADHKAR,
   },
 ];

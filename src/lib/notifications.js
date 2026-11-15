@@ -1,3 +1,4 @@
+import { getLocalDateKey } from './prayerTimes.js';
 /**
  * نظام التنبيهات الحقيقي المتوافق مع هواتف الموبايل (Android & iOS PWA)
  * يستخدم ServiceWorkerRegistration.showNotification لإظهار الإشعارات بنظام الهاتف من الخارج
@@ -301,7 +302,7 @@ export function checkAndTriggerDueNotifications(settings, triggeredMap = {}, onV
   const currentHours = String(now.getHours()).padStart(2, '0');
   const currentMinutes = String(now.getMinutes()).padStart(2, '0');
   const currentTimeStr = `${currentHours}:${currentMinutes}`;
-  const todayKey = now.toISOString().split('T')[0];
+  const todayKey = getLocalDateKey(now);
 
   const updatedMap = { ...(triggeredMap || {}) };
 
@@ -318,6 +319,8 @@ export function checkAndTriggerDueNotifications(settings, triggeredMap = {}, onV
 
   for (const item of items) {
     const itemConfig = settings[item.key];
+    const isPrayer = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].includes(item.key);
+    if (isPrayer && settings.prayerTimesDate !== todayKey) continue;
     const isEnabled = itemConfig?.enabled ?? true;
     const targetTime = itemConfig?.time || item.fallback;
 

@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signOut as fbSignOut,
   updateProfile,
@@ -13,6 +14,7 @@ import {
   doc,
   getDoc,
   setDoc,
+  runTransaction,
   updateDoc,
   onSnapshot,
   serverTimestamp,
@@ -23,20 +25,41 @@ import {
   removeOfflineAction,
 } from '../lib/offlineSync.js';
 import { settleOrTimeout, withTimeout } from '../lib/async.js';
+import { revokeFcmToken } from '../lib/fcm.js';
 
 const AuthContext = createContext(undefined);
 
 const ROOT_ADMIN_EMAILS = [
   'khalidsalah948@gmail.com',
-  'khalidsalah9444@gmail.com',
-  'khalid.niletechno@gmail.com',
 ];
 
-const isRootAdminEmail = (email) =>
+const isRootAdminEmail = (email, emailVerified = false) =>
+  Boolean(emailVerified) &&
   Boolean(email) &&
   ROOT_ADMIN_EMAILS.includes(String(email).trim().toLowerCase());
 
 const adminCacheKey = (uid) => `mutabi_is_admin_${uid}`;
+
+async function ensureUserProfile(user, displayName) {
+  const userRef = doc(db, 'users', user.uid);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(userRef);
+    if (snapshot.exists()) return snapshot.data();
+    const newDoc = {
+      displayName:
+        displayName || user.displayName || user.email?.split('@')[0] || 'مستخدم جديد',
+      email: user.email || '',
+      photoURL: user.photoURL || null,
+      timezone: 'Africa/Cairo',
+      theme: 'light',
+      isDisabled: false,
+      createdAt: serverTimestamp(),
+      lastActiveAt: serverTimestamp(),
+    };
+    transaction.set(userRef, newDoc);
+    return newDoc;
+  });
+}
 
 function readAdminCache(uid) {
   try {
@@ -86,12 +109,9 @@ export function AuthProvider({ children }) {
   const cached = getCachedAuth();
   const [user, setUser] = useState(cached.user);
   const [userDoc, setUserDoc] = useState(cached.userDoc);
-  const [isAdmin, setIsAdmin] = useState(() => {
-    return (
-      isRootAdminEmail(cached.user?.email) ||
-      (cached.user?.uid ? readAdminCache(cached.user.uid) : false)
-    );
-  });
+  // لا نمنح صلاحية من الكاش أثناء بدء جلسة متصلة؛ ننتظر تحقق Firebase.
+  // الكاش يُستخدم فقط داخل applySession عند انعدام الاتصال.
+  const [isAdmin, setIsAdmin] = useState(false);
   // لو عندنا مستخدم محفوظ نفتح التطبيق فوراً بدون انتظار Firebase
   const [loading, setLoading] = useState(!cached.user);
   const [error, setError] = useState(null);
@@ -160,38 +180,22 @@ export function AuthProvider({ children }) {
           if (stillCurrent()) setIsAdmin(adminValue);
         } catch (adminError) {
           if (stillCurrent()) {
-            setIsAdmin(rootAdmin || readAdminCache(currentUser.uid));
+            setIsAdmin(rootAdmin || (!navigator.onLine && readAdminCache(currentUser.uid)));
           }
           if (!isOfflineLikeError(adminError)) {
             console.error('Failed to check the administrator profile:', adminError);
           }
         }
 
-        const userSnap = await withTimeout(getDoc(userRef), 8000);
+        const existedBefore = (await withTimeout(getDoc(userRef), 8000)).exists();
+        const data = await withTimeout(
+          ensureUserProfile(currentUser, pendingNameRef.current),
+          8000
+        );
         if (!stillCurrent()) return;
-        if (!userSnap.exists()) {
-          const newDoc = {
-            displayName:
-              currentUser.displayName ||
-              pendingNameRef.current ||
-              currentUser.email?.split('@')[0] ||
-              'مستخدم جديد',
-            email: currentUser.email || '',
-            photoURL: currentUser.photoURL || null,
-            timezone: 'Africa/Cairo',
-            theme: 'light',
-            isDisabled: false,
-            createdAt: serverTimestamp(),
-            lastActiveAt: serverTimestamp(),
-          };
-          await setDoc(userRef, newDoc);
-          if (stillCurrent()) setUserDoc({ ...newDoc, uid: currentUser.uid });
-          pendingNameRef.current = null;
-        } else {
-          const data = userSnap.data();
-          setUserDoc({ ...data, uid: currentUser.uid });
-          updateDoc(userRef, { lastActiveAt: serverTimestamp() }).catch(() => {});
-        }
+        setUserDoc({ ...data, uid: currentUser.uid });
+        pendingNameRef.current = null;
+        if (existedBefore) updateDoc(userRef, { lastActiveAt: serverTimestamp() }).catch(() => {});
       } catch (err) {
         console.warn('Initial profile fetch warning:', err);
         if (!stillCurrent()) return;
@@ -210,8 +214,8 @@ export function AuthProvider({ children }) {
       setUser(currentUser);
       setProfileSyncError(null);
 
-      const rootAdmin = isRootAdminEmail(currentUser.email);
-      setIsAdmin(rootAdmin || readAdminCache(currentUser.uid));
+      const rootAdmin = isRootAdminEmail(currentUser.email, currentUser.emailVerified === true);
+      setIsAdmin(rootAdmin || (!navigator.onLine && readAdminCache(currentUser.uid)));
 
       try {
         localStorage.setItem(
@@ -219,6 +223,7 @@ export function AuthProvider({ children }) {
           JSON.stringify({
             uid: currentUser.uid,
             email: currentUser.email,
+            emailVerified: currentUser.emailVerified === true,
             displayName: currentUser.displayName,
             photoURL: currentUser.photoURL,
           })
@@ -329,22 +334,16 @@ export function AuthProvider({ children }) {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       try {
+        await sendEmailVerification(cred.user);
+      } catch (verificationError) {
+        console.warn('Could not send the email verification message:', verificationError);
+      }
+      try {
         await updateProfile(cred.user, { displayName });
       } catch (profileError) {
         console.error('Failed to update the Firebase account display name:', profileError);
       }
-      const userRef = doc(db, 'users', cred.user.uid);
-      const newDoc = {
-        displayName,
-        email,
-        photoURL: null,
-        timezone: 'Africa/Cairo',
-        theme: 'light',
-        isDisabled: false,
-        createdAt: serverTimestamp(),
-        lastActiveAt: serverTimestamp(),
-      };
-      await setDoc(userRef, newDoc);
+      const newDoc = await ensureUserProfile(cred.user, displayName);
       setUserDoc({ ...newDoc, uid: cred.user.uid });
       pendingNameRef.current = null;
     } catch (err) {
@@ -441,6 +440,11 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
+    const userBeingLoggedOut = user;
+    if (userBeingLoggedOut) {
+      // Revoke before clearing the identity so the token is deleted under its owner's path.
+      await revokeFcmToken(userBeingLoggedOut);
+    }
     stopUserDocListener();
     try {
       localStorage.removeItem('mutabi_auth_user');

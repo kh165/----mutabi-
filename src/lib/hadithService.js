@@ -132,11 +132,14 @@ export async function fetchBookHadiths(collectionId, sectionId) {
   }
 
   if (!rawData || !rawData.hadiths || rawData.hadiths.length === 0) {
-    throw new Error(
-      lastError?.name === 'AbortError'
-        ? 'انتهت مهلة الاتصال بالخادم. تأكد من اتصالك بالإنترنت.'
-        : 'تعذر تحميل نصوص الكتاب. يمكنك المحاولة مجدداً.'
-    );
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      const error = new Error('أنت أوفلاين ولم تحمّل هذا الكتاب. اضغط «حمّل للأوفلاين» أولاً.');
+      error.code = 'OFFLINE_BOOK_NOT_CACHED';
+      throw error;
+    }
+    const error = new Error(lastError?.name === 'AbortError' ? 'الخادم لا يستجيب الآن. تحقق من اتصالك وحاول مجدداً.' : 'الخادم لا يستجيب الآن. حاول تحميل الكتاب مجدداً.');
+    error.code = 'HADITH_SERVER_UNAVAILABLE';
+    throw error;
   }
 
   // Format & clean hadiths
@@ -191,7 +194,8 @@ export function getCollectionStats(collectionId, readMap = {}, bookmarkedMap = {
       if (bookmarkedMap[h.id]) bookmarkedCount++;
     });
   } else if (collectionId === 'bukhari') {
-    totalHadiths = 7563;
+    // The API contains 7,589 records; the printed hadith numbering ends at 7,563.
+    totalHadiths = 7589;
     Object.keys(readMap).forEach((id) => {
       if (id.startsWith('bukhari_') && readMap[id]) readCount++;
     });

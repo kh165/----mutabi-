@@ -15,32 +15,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { enqueueOfflineAction, getOfflineQueue, removeOfflineAction } from '../lib/offlineSync.js';
 import { settleOrTimeout } from '../lib/async.js';
 
-export const STARTER_PLAYLIST_ITEMS = [
-  {
-    id: 'starter_1',
-    title: 'مقدمة في تدبر القرآن الكريم ومفاتيح الفهم',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    durationMin: 25,
-    order: 1,
-    playlistTitle: 'سلسلة تدبر القرآن',
-  },
-  {
-    id: 'starter_2',
-    title: 'كيف نعيش مع سورة الفاتحة في صلاتنا؟',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    durationMin: 30,
-    order: 2,
-    playlistTitle: 'سلسلة تدبر القرآن',
-  },
-  {
-    id: 'starter_3',
-    title: 'أنوار سورة الكهف والنجاة من الفتن',
-    youtubeUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    durationMin: 40,
-    order: 3,
-    playlistTitle: 'سلسلة تدبر القرآن',
-  },
-];
+export const STARTER_PLAYLIST_ITEMS = [];
 
 function getProgressCacheKey(uid, activityId) {
   return `mutabi_item_progress_${uid}_${activityId}`;
@@ -121,17 +96,12 @@ export function useItemProgress(activityId) {
         const list = [];
         snapshot.forEach((d) => list.push({ id: d.id, ...d.data() }));
 
-        if (list.length === 0) {
-          // Provide default starter series if not yet configured
-          setItems(STARTER_PLAYLIST_ITEMS.map((item) => ({ ...item, activityId })));
-        } else {
-          setItems(list);
-        }
+        setItems(list);
         setLoading(false);
       },
       (error) => {
-        console.warn('Items fetch fallback to starter items:', error);
-        setItems(STARTER_PLAYLIST_ITEMS.map((item) => ({ ...item, activityId })));
+        console.warn('Could not load activity items:', error);
+        setItems([]);
         setLoading(false);
       }
     );
@@ -394,7 +364,7 @@ export function useItemProgress(activityId) {
     async (data) => {
       if (!activityId) return;
       try {
-        if (data.id && !data.id.startsWith('starter_')) {
+        if (data.id) {
           const ref = doc(db, `activities/${activityId}/items`, data.id);
           await setDoc(ref, { ...data, updatedAt: serverTimestamp() }, { merge: true });
         } else {

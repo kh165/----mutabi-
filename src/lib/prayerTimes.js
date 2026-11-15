@@ -1,3 +1,5 @@
+import { CalculationMethod, Coordinates, PrayerTimes } from 'adhan';
+import prayerMethodMapping from '../../shared/prayer-methods.cjs';
 const PRAYER_TIME_KEYS = {
   Fajr: 'fajr',
   Dhuhr: 'dhuhr',
@@ -6,6 +8,23 @@ const PRAYER_TIME_KEYS = {
   Isha: 'isha',
 };
 
+
+function getLocalCalculationParameters(method, timezone) {
+  const methodName = prayerMethodMapping.METHOD_NAMES[prayerMethodMapping.resolvePrayerMethod(method, timezone)];
+  return CalculationMethod[methodName]();
+}
+function formatLocalPrayerTimes(latitude, longitude, date, method, timezone) {
+  const coordinates = new Coordinates(latitude, longitude);
+  const calculated = new PrayerTimes(coordinates, date, getLocalCalculationParameters(method, timezone));
+  const format = (value) => `${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`;
+  return { fajr: format(calculated.fajr), dhuhr: format(calculated.dhuhr), asr: format(calculated.asr), maghrib: format(calculated.maghrib), isha: format(calculated.isha) };
+}
+/** @param {string} timezone @returns {number} */
+/** @param {string} timezone @returns {number} */
+export function getCalculationMethod(timezone) {
+  return prayerMethodMapping.resolvePrayerMethod('auto', timezone);
+}
+
 export function getLocalDateKey(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -13,7 +32,15 @@ export function getLocalDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-export async function fetchPrayerTimes(latitude, longitude, date = new Date()) {
+/**
+ * @param {number} latitude
+ * @param {number} longitude
+ * @param {Date} date
+ * @param {string | number} method Prayer method ID or 'auto'.
+ * @param {string} [timezone]
+ * @returns {Promise<{fajr:string,dhuhr:string,asr:string,maghrib:string,isha:string}>}
+ */
+export async function fetchPrayerTimes(latitude, longitude, date = new Date(), method = 'auto', timezone) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
     throw new Error('إحداثيات الموقع غير صالحة');
   }
@@ -22,13 +49,21 @@ export async function fetchPrayerTimes(latitude, longitude, date = new Date()) {
     date.getMonth() + 1
   ).padStart(2, '0')}-${date.getFullYear()}`;
   const url = new URL(`https://api.aladhan.com/v1/timings/${datePath}`);
-  url.searchParams.set('latitude', latitude);
-  url.searchParams.set('longitude', longitude);
-  url.searchParams.set('method', '5');
+  url.searchParams.set('latitude', String(latitude));
+  url.searchParams.set('longitude', String(longitude));
+  const resolvedMethod = prayerMethodMapping.resolvePrayerMethod(method, timezone);
+  url.searchParams.set('method', String(prayerMethodMapping.ALADHAN_API_METHODS[resolvedMethod] || resolvedMethod));
 
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url);
+  } catch (networkError) {
+    console.warn('Prayer API unavailable; calculated prayer times locally.', networkError);
+    return formatLocalPrayerTimes(latitude, longitude, date, resolvedMethod, timezone);
+  }
   if (!response.ok) {
-    throw new Error(`تعذر جلب مواقيت الصلاة (HTTP ${response.status})`);
+    console.warn('Prayer API returned an error; calculated prayer times locally.');
+    return formatLocalPrayerTimes(latitude, longitude, date, resolvedMethod, timezone);
   }
 
   const result = await response.json();
@@ -36,15 +71,21 @@ export async function fetchPrayerTimes(latitude, longitude, date = new Date()) {
     throw new Error('استجابة مواقيت الصلاة غير مكتملة');
   }
 
-  return Object.fromEntries(
-    Object.entries(PRAYER_TIME_KEYS).map(([apiName, settingKey]) => {
-      const time = result.data.timings[apiName]?.split(' ')[0];
-      if (!/^\d{2}:\d{2}$/.test(time || '')) {
-        throw new Error(`وقت صلاة ${settingKey} غير صالح`);
-      }
-      return [settingKey, time];
-    })
-  );
+  const readTime = (apiName, settingKey) => {
+    const time = result.data.timings[apiName]?.split(' ')[0];
+    if (!/^\d{2}:\d{2}$/.test(time || '')) {
+      throw new Error(`وقت صلاة ${settingKey} غير صالح`);
+    }
+    return time;
+  };
+
+  return {
+    fajr: readTime('Fajr', 'fajr'),
+    dhuhr: readTime('Dhuhr', 'dhuhr'),
+    asr: readTime('Asr', 'asr'),
+    maghrib: readTime('Maghrib', 'maghrib'),
+    isha: readTime('Isha', 'isha'),
+  };
 }
 
 export function requestCurrentPosition() {

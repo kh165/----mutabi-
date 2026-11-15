@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useTheme } from '../../context/ThemeContext.jsx';
 import { useAdminNotes } from '../../hooks/useAdminNotes.js';
@@ -16,6 +17,7 @@ import {
   ChevronDown,
   Sun,
   Moon,
+  BookHeart,
   CircleDot,
   BookOpen,
   Award,
@@ -53,14 +55,93 @@ export function Shell({
   } = useAdminNotes();
   const [notesOpen, setNotesOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuButtonRef = useRef(null);
+  const shellHeaderRef = useRef(null);
+  const [userMenuPosition, setUserMenuPosition] = useState(null);
   const [quranOpen, setQuranOpen] = useState(false);
+  const quranHistoryEntryRef = useRef(false);
   const [offlineOpen, setOfflineOpen] = useState(false);
   const [notesReadError, setNotesReadError] = useState(null);
   const readAttemptsRef = useRef(new Set());
 
   React.useEffect(() => {
+    const handleBrowserBack = () => {
+      if (!quranHistoryEntryRef.current) return;
+      quranHistoryEntryRef.current = false;
+      setQuranOpen(false);
+    };
+    window.addEventListener('popstate', handleBrowserBack);
+    return () => window.removeEventListener('popstate', handleBrowserBack);
+  }, []);
+
+  const openQuran = () => {
+    if (!quranHistoryEntryRef.current) {
+      // Add a same-page guard entry first, then the Quran entry. The first
+      // browser Back now returns to this app page and closes the reader,
+      // even when the user opened the app directly from an external link.
+      window.history.pushState(
+        { ...(window.history.state || {}), mutabiQuranBase: true },
+        '',
+        window.location.href,
+      );
+      window.history.pushState(
+        { ...(window.history.state || {}), mutabiQuranOpen: true },
+        '',
+        window.location.href,
+      );
+      quranHistoryEntryRef.current = true;
+    }
+    setQuranOpen(true);
+  };
+
+  const closeQuran = () => {
+    const hasQuranHistoryEntry = quranHistoryEntryRef.current;
+    quranHistoryEntryRef.current = false;
+    setQuranOpen(false);
+    if (hasQuranHistoryEntry) window.history.back();
+  };
+
+  React.useEffect(() => {
     if (showOfflineSetup) setOfflineOpen(true);
   }, [showOfflineSetup]);
+
+  React.useEffect(() => {
+    if (!userMenuOpen) {
+      setUserMenuPosition(null);
+      return undefined;
+    }
+
+    const updateUserMenuPosition = () => {
+      const button = userMenuButtonRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const headerBottom = shellHeaderRef.current?.getBoundingClientRect().bottom || rect.bottom;
+      const menuWidth = Math.min(224, Math.max(208, window.innerWidth - 16));
+      const left = Math.min(
+        Math.max(8, rect.right - menuWidth),
+        Math.max(8, window.innerWidth - menuWidth - 8),
+      );
+      // Keep the menu outside the header, over the page content itself.
+      const below = Math.max(rect.bottom + 12, headerBottom + 12);
+      setUserMenuPosition({ top: below, left, width: menuWidth });
+    };
+
+    updateUserMenuPosition();
+    window.addEventListener('resize', updateUserMenuPosition);
+    window.addEventListener('scroll', updateUserMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateUserMenuPosition);
+      window.removeEventListener('scroll', updateUserMenuPosition, true);
+    };
+  }, [userMenuOpen]);
+
+  React.useEffect(() => {
+    const openOfflineModal = () => setOfflineOpen(true);
+    window.addEventListener('mutabi:open-offline-modal', openOfflineModal);
+    return () => window.removeEventListener('mutabi:open-offline-modal', openOfflineModal);
+  }, []);
+
+
 
   const closeOfflineModal = () => {
     setOfflineOpen(false);
@@ -98,8 +179,11 @@ export function Shell({
   const navItems = [
     { id: 'today', label: 'الورد اليومي', icon: CalendarDays },
     { id: 'todos', label: 'قائمة المهام', icon: CheckSquare },
-    { id: 'tasbeeh', label: 'التسبيح والأذكار', icon: CircleDot },
+    { id: 'tasbeeh', label: 'التسبيح', icon: CircleDot },
+    { id: 'adhkar', label: 'الأذكار', icon: Sun },
+    { id: 'salawat', label: 'الصلوات', icon: BookHeart },
     { id: 'hadith', label: 'الأحاديث النبوية', icon: BookOpen },
+    { id: 'library', label: 'المكتبة الإسلامية', icon: BookOpen },
     { id: 'progress', label: 'التقدم والأوسمة', icon: TrendingUp },
     { id: 'history', label: 'سجل الإنجازات', icon: History },
     { id: 'profile', label: 'الملف الشخصي', icon: User },
@@ -112,7 +196,7 @@ export function Shell({
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2.5 sm:px-6 py-2 sm:py-3 shadow-2xs max-w-full overflow-hidden">
+      <header ref={shellHeaderRef} className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-2.5 sm:px-6 py-2 sm:py-3 shadow-2xs max-w-full overflow-visible">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4">
           {/* Logo & Brand */}
           <div
@@ -164,7 +248,7 @@ export function Shell({
             {/* Quran Reader with Night Mode */}
             <button
               type="button"
-              onClick={() => setQuranOpen(true)}
+              onClick={openQuran}
               className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/80 flex items-center justify-center text-emerald-700 dark:text-emerald-300 transition-all border border-emerald-200 dark:border-emerald-800 cursor-pointer shrink-0"
               title="المصحف الشريف - القراءة والوضع الليلي المريح"
               aria-label="المصحف الشريف"
@@ -210,8 +294,11 @@ export function Shell({
             <div className="relative shrink-0">
               <button
                 type="button"
+                ref={userMenuButtonRef}
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center gap-1 sm:gap-2 p-0.5 sm:p-1 sm:pe-2.5 rounded-xl sm:rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 transition-all border border-slate-200/60 dark:border-slate-700 cursor-pointer"
+                aria-label="فتح قائمة الحساب"
+                aria-expanded={userMenuOpen}
               >
                 <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-600 text-white font-bold text-xs sm:text-sm flex items-center justify-center overflow-hidden shrink-0 shadow-2xs">
                   {userDoc?.photoURL ? (
@@ -226,51 +313,61 @@ export function Shell({
                 <ChevronDown className="w-3 h-3 text-slate-400 hidden sm:inline" />
               </button>
 
-              {userMenuOpen && (
-                <div className="absolute end-0 mt-2 w-52 sm:w-56 bg-white dark:bg-slate-900 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-800 p-2 z-50 text-right animate-in fade-in">
-                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
-                    <p className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
-                      {userDoc?.displayName}
-                    </p>
-                    <p className="text-[10px] text-slate-400 truncate" dir="ltr">
-                      {user?.email || userDoc?.email}
-                    </p>
-                  </div>
-                  <div className="py-1">
-                    <button
-                      onClick={() => {
-                        onSelectTab('profile');
-                        setUserMenuOpen(false);
-                      }}
-                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl flex items-center gap-2 cursor-pointer"
-                    >
-                      <User className="w-3.5 h-3.5 text-slate-400" />
-                      الملف الشخصي
-                    </button>
-                    {isAdmin && (
+              {userMenuOpen && userMenuPosition && createPortal(
+                <div
+                  className="fixed inset-0 z-[9999]"
+                  onClick={() => setUserMenuOpen(false)}
+                >
+                  <div
+                    className="absolute rounded-3xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-800 p-2 text-right animate-in fade-in"
+                    style={userMenuPosition}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+                      <p className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
+                        {userDoc?.displayName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 truncate" dir="ltr">
+                        {user?.email || userDoc?.email}
+                      </p>
+                    </div>
+                    <div className="py-1">
                       <button
                         onClick={() => {
-                          onSelectTab('admin');
+                          onSelectTab('profile');
                           setUserMenuOpen(false);
                         }}
-                        className="w-full px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl flex items-center gap-2 cursor-pointer"
+                        className="w-full px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl flex items-center gap-2 cursor-pointer"
                       >
-                        <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                        لوحة الإدارة
+                        <User className="w-3.5 h-3.5 text-slate-400" />
+                        الملف الشخصي
                       </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        logout();
-                        setUserMenuOpen(false);
-                      }}
-                      className="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-2 cursor-pointer"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      تسجيل الخروج
-                    </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            onSelectTab('admin');
+                            setUserMenuOpen(false);
+                          }}
+                          className="w-full px-3 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 rounded-xl flex items-center gap-2 cursor-pointer"
+                        >
+                          <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                          لوحة الإدارة
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          logout();
+                          setUserMenuOpen(false);
+                        }}
+                        className="w-full px-3 py-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-xl flex items-center gap-2 cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        تسجيل الخروج
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </div>,
+                document.body,
               )}
             </div>
           </div>
@@ -431,7 +528,7 @@ export function Shell({
         <Suspense fallback={null}>
           <QuranReaderModal
             isOpen
-            onClose={() => setQuranOpen(false)}
+            onClose={closeQuran}
             initialSurahNumber={1}
           />
         </Suspense>

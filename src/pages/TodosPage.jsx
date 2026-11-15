@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { db } from '../firebase.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getTodayDateString, getDateOffset } from '../lib/dates.js';
 import { enqueueOfflineAction, getOfflineQueue } from '../lib/offlineSync.js';
 
 // ==========================================
@@ -574,6 +575,7 @@ function TodoItemCard({
   onAddSubtask,
   onDeleteSubtask,
 }) {
+  const { userDoc } = useAuth();
   const [expanded, setExpanded] = useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isAddingSubtask, setIsAddingSubtask] = useState(false);
@@ -585,8 +587,8 @@ function TodoItemCard({
 
   const getDueDateLabel = () => {
     if (!todo.dueDate) return null;
-    const today = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    const today = getTodayDateString(userDoc?.timezone);
+    const tomorrow = getDateOffset(today, 1);
 
     let isOverdue = false;
     let label = todo.dueDate;
@@ -806,6 +808,7 @@ function TodoItemCard({
 // 4. Subcomponent: TodoModal
 // ==========================================
 function TodoModal({ isOpen, onClose, onSave, initialTodo = null }) {
+  const { userDoc } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('worship');
@@ -882,16 +885,10 @@ function TodoModal({ isOpen, onClose, onSave, initialTodo = null }) {
   };
 
   const setQuickDate = (type) => {
-    const today = new Date();
-    if (type === 'today') {
-      setDueDate(today.toISOString().split('T')[0]);
-    } else if (type === 'tomorrow') {
-      const tomorrow = new Date(Date.now() + 86400000);
-      setDueDate(tomorrow.toISOString().split('T')[0]);
-    } else if (type === 'nextWeek') {
-      const nextWeek = new Date(Date.now() + 7 * 86400000);
-      setDueDate(nextWeek.toISOString().split('T')[0]);
-    }
+    const today = getTodayDateString(userDoc?.timezone);
+    if (type === 'today') setDueDate(today);
+    else if (type === 'tomorrow') setDueDate(getDateOffset(today, 1));
+    else if (type === 'nextWeek') setDueDate(getDateOffset(today, 7));
   };
 
   return (

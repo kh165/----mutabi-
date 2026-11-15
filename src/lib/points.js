@@ -62,46 +62,54 @@ export const RANKS = [
  * - Standard daily habits: 20 pts each
  * - Active Streak bonus: 10 pts per streak day
  */
+/** @param {Array<Object>} logs @param {Array<Object>} activities @param {{currentStreak:number}} streaks @returns {Object} */
+/** @param {Array<Object>} logs @param {Array<Object>} activities @param {{currentStreak:number}} streaks @returns {Object} */
 export function calculateUserPoints(logs = [], activities = [], streaks = { currentStreak: 0 }) {
   let worshipPoints = 0;
   let prayersCount = 0;
   let quranPagesCount = 0;
   let tasbeehCount = 0;
   let adhkarCount = 0;
+  const activityById = new Map(activities.map((activity) => [activity.id, activity]));
 
   for (const log of logs) {
-    if (!log.completed) continue;
+    const activity = activityById.get(log.activityId);
+    const activityType = activity?.type;
+    const activityTitle = activity?.title || '';
 
-    // Check prayer activity logs
-    if (log.details?.prayers) {
-      const prayers = log.details.prayers;
-      const count = Object.values(prayers).filter(Boolean).length;
-      worshipPoints += count * 20;
-      prayersCount += count;
-    } else if (log.activityId === 'prayers' || log.activityTitle?.includes('صلاة')) {
-      worshipPoints += 100;
-      prayersCount += 5;
-    } else if (log.details?.pagesCount || log.details?.fromPage) {
-      // Quran page reading
-      const pages = log.details.pagesCount ||
-        (log.details.toPage && log.details.fromPage
-          ? Math.max(1, log.details.toPage - log.details.fromPage + 1)
-          : (log.amount || 1));
-      worshipPoints += pages * 10;
+    if (activityType === 'prayers' || log.details?.prayers) {
+      const performedCount = Object.values(log.details?.prayers || {}).filter(
+        (prayer) => ['prayed_jamaah', 'prayed_individual'].includes(
+          typeof prayer === 'string' ? prayer : prayer?.status
+        )
+      ).length;
+      prayersCount += performedCount;
+      worshipPoints += performedCount * 20;
+    } else if (activityType === 'read') {
+      const pages = Array.isArray(log.details?.pagesRead)
+        ? new Set(log.details.pagesRead).size
+        : log.details?.pagesCount != null
+          ? Math.max(0, Number(log.details.pagesCount) || 0)
+          : log.details?.fromPage != null && log.details?.toPage != null
+            ? Math.max(0, Number(log.details.toPage) - Number(log.details.fromPage) + 1)
+            : Math.max(0, Number(log.amount) || 0);
       quranPagesCount += pages;
-    } else if (log.activityType === 'quran_memorize' || log.details?.surah) {
-      // Quran memorization
+      worshipPoints += pages * 10;
+    } else if (activityType === 'memorize') {
       worshipPoints += 30;
-    } else if (log.activityId === 'adhkar_morning' || log.activityId === 'adhkar_evening' || log.activityTitle?.includes('أذكار')) {
-      worshipPoints += 25;
-      adhkarCount += 1;
-    } else if (log.activityType === 'counter' || log.activityId === 'tasbeeh') {
-      const amount = log.amount || 100;
+    } else if (activityTitle.includes('أذكار')) {
+      const completedCategories = log.details?.completedCategories;
+      const categoryCount = completedCategories && typeof completedCategories === 'object'
+        ? Object.values(completedCategories).filter(Boolean).length
+        : 1;
+      worshipPoints += categoryCount * 25;
+      adhkarCount += categoryCount;
+    } else if (activityTitle.includes('تسبيح')) {
+      const amount = Math.max(0, Number(log.amount) || 0);
       tasbeehCount += amount;
       worshipPoints += Math.floor(amount / 100) * 10;
       if (amount >= 1000) worshipPoints += 50;
-    } else {
-      // Other generic daily activities
+    } else if (log.completed) {
       worshipPoints += 20;
     }
   }

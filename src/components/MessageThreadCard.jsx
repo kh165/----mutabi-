@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Clock3, Send } from 'lucide-react';
+import { Check, CheckCheck, Clock3, Send } from 'lucide-react';
 
 function formatMessageTime(value) {
   const date = value?.toDate ? value.toDate() : new Date(value);
@@ -10,12 +10,23 @@ function formatMessageTime(value) {
   }).format(date);
 }
 
+function ReadReceipt({ isRead }) {
+  const label = isRead ? 'تمت القراءة' : 'تم الإرسال';
+  return (
+    <span className={`inline-flex items-center ${isRead ? 'text-sky-500' : 'text-slate-400'}`} title={label} aria-label={label}>
+      {isRead ? <CheckCheck className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 export function MessageThreadCard({ note, canReply = false, onReply }) {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const sentReply = note.reply;
-  const messageTime = formatMessageTime(note.createdAt);
+  const noteIsOutgoing = !canReply;
+  const replyIsOutgoing = canReply;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -35,39 +46,44 @@ export function MessageThreadCard({ note, canReply = false, onReply }) {
     }
   };
 
+  const bubbleBase = 'max-w-[92%] rounded-2xl p-3.5 shadow-sm';
+  const outgoingBubble = 'border border-emerald-600 bg-emerald-600 text-white';
+  const incomingBubble = 'border border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200';
+  const metadataClass = (outgoing) => outgoing ? 'text-emerald-100' : 'text-slate-400';
+  const senderClass = (outgoing) => outgoing ? 'font-bold text-white' : 'font-bold text-emerald-700 dark:text-emerald-400';
+
   return (
     <article className="space-y-3">
-      <div className="flex justify-start">
-        <div className="max-w-[92%] rounded-2xl rounded-es-md border border-emerald-100 bg-white p-3.5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px]">
-            <span className="font-bold text-emerald-700 dark:text-emerald-400">
-              {note.fromName || 'المشرف'}
-            </span>
-            <span className="flex items-center gap-1 text-slate-400">
+      <div className={`flex ${noteIsOutgoing ? 'justify-end' : 'justify-start'}`}>
+        <div className={`${bubbleBase} ${noteIsOutgoing ? outgoingBubble : incomingBubble}`}>
+          <div className={`mb-1.5 flex items-center justify-between gap-3 text-[11px] ${metadataClass(noteIsOutgoing)}`}>
+            <span className={senderClass(noteIsOutgoing)}>{note.fromName || 'المشرف'}</span>
+            <span className="flex items-center gap-1 whitespace-nowrap">
+              {noteIsOutgoing && <ReadReceipt isRead={Boolean(note.isRead)} />}
               <Clock3 className="h-3 w-3" />
-              {messageTime}
+              {formatMessageTime(note.createdAt)}
             </span>
           </div>
-          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700 dark:text-slate-200">
+          <p className={`whitespace-pre-wrap break-words text-sm leading-7 ${noteIsOutgoing ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
             {note.text}
           </p>
         </div>
       </div>
 
       {sentReply && (
-        <div className="flex justify-end">
-          <div className="max-w-[92%] rounded-2xl rounded-ee-md bg-emerald-600 p-3.5 text-white shadow-sm">
-            <div className="mb-1.5 flex items-center justify-between gap-3 text-[11px] text-emerald-100">
-              <span className="font-bold">{sentReply.fromName || 'أنت'}</span>
-              <span>{formatMessageTime(sentReply.createdAt)}</span>
+        <div className={`flex ${replyIsOutgoing ? 'justify-end' : 'justify-start'}`}>
+          <div className={`${bubbleBase} ${replyIsOutgoing ? outgoingBubble : incomingBubble}`}>
+            <div className={`mb-1.5 flex items-center justify-between gap-3 text-[11px] ${metadataClass(replyIsOutgoing)}`}>
+              <span className={senderClass(replyIsOutgoing)}>{sentReply.fromName || 'أنت'}</span>
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                {replyIsOutgoing && <ReadReceipt isRead={Boolean(sentReply.isRead)} />}
+                <Clock3 className="h-3 w-3" />
+                {formatMessageTime(sentReply.createdAt)}
+              </span>
             </div>
-            <p className="whitespace-pre-wrap break-words text-sm leading-7">
+            <p className={`whitespace-pre-wrap break-words text-sm leading-7 ${replyIsOutgoing ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
               {sentReply.text}
             </p>
-            <span className="mt-1 flex items-center justify-end gap-1 text-[10px] text-emerald-100">
-              <Check className="h-3 w-3" />
-              تم الإرسال
-            </span>
           </div>
         </div>
       )}

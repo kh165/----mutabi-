@@ -15,30 +15,37 @@ import { PrayerAlertBanner } from './components/PrayerAlertBanner.jsx';
 import { AdminErrorBoundary } from './components/AdminErrorBoundary.jsx';
 import { AdminFollowConsentDialog } from './components/AdminFollowConsentDialog.jsx';
 import { PWAInstallBanner } from './components/layout/PWAInstallBanner.jsx';
+import { UpdateBanner } from './components/layout/UpdateBanner.jsx';
 import { LoaderCircle } from 'lucide-react';
 import {
   NOTIFICATION_DEFAULT_SETTINGS,
   checkAndTriggerDueNotifications,
 } from './lib/notifications.js';
-import { applyPrayerTimes, fetchPrayerTimes, getLocalDateKey } from './lib/prayerTimes.js';
+import { applyPrayerTimes, fetchPrayerTimes, getLocalDateKey, getCalculationMethod } from './lib/prayerTimes.js';
 import { getOfflinePackageStatus } from './lib/offlineSync.js';
+import { getPrayerArabicName } from './lib/prayerNames.js';
 
 const Today = lazy(() => import('./pages/Today.jsx').then((module) => ({ default: module.Today })));
+const AdhkarPage = lazy(() => import('./pages/AdhkarPage.jsx').then((module) => ({ default: module.AdhkarPage })));
+const SalatPage = lazy(() => import('./pages/SalatPage.jsx').then((module) => ({ default: module.SalatPage })));
 const Progress = lazy(() => import('./pages/Progress.jsx').then((module) => ({ default: module.Progress })));
 const History = lazy(() => import('./pages/History.jsx').then((module) => ({ default: module.History })));
 const Profile = lazy(() => import('./pages/Profile.jsx').then((module) => ({ default: module.Profile })));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx').then((module) => ({ default: module.AdminDashboard })));
 const TasbeehPage = lazy(() => import('./pages/TasbeehPage.jsx').then((module) => ({ default: module.TasbeehPage })));
 const HadithPage = lazy(() => import('./pages/HadithPage.jsx').then((module) => ({ default: module.HadithPage })));
+const IslamicLibraryPage = lazy(() => import('./pages/IslamicLibraryPage.jsx').then((module) => ({ default: module.IslamicLibraryPage })));
+
 const TodosPage = lazy(() => import('./pages/TodosPage.jsx').then((module) => ({ default: module.TodosPage })));
+
+const VALID_TABS = ['today', 'tasbeeh', 'adhkar', 'salawat', 'hadith', 'library', 'todos', 'progress', 'history', 'profile', 'admin'];
 
 function getInitialTab() {
   const hash = window.location.hash.replace('#', '').trim();
-  const validTabs = ['today', 'tasbeeh', 'hadith', 'todos', 'progress', 'history', 'profile', 'admin'];
-  if (hash && validTabs.includes(hash)) return hash;
+  if (hash && VALID_TABS.includes(hash)) return hash;
   try {
     const saved = localStorage.getItem('mutabi_active_tab');
-    if (saved && validTabs.includes(saved)) return saved;
+    if (saved && VALID_TABS.includes(saved)) return saved;
   } catch {}
   return 'today';
 }
@@ -48,59 +55,103 @@ function MainApp() {
   const { activities } = useActivities();
   const { logs, saveLog } = useLogs();
   const [currentTab, setCurrentTabState] = useState(getInitialTab);
+  const [adhkarInitialCategory, setAdhkarInitialCategory] = useState('morning');
   const [offlineSetupOpen, setOfflineSetupOpen] = useState(false);
   const [activeVisualAlert, setActiveVisualAlert] = useState(null);
   const triggeredMapRef = useRef({});
   const refreshingPrayerTimesRef = useRef(null);
 
+  // نمنع المتصفح من إدارة موضع السكرول بنفسه (كان بيتعارض مع الاستعادة اليدوية)
   useEffect(() => {
-    let restoreFrame = 0;
-    let restoreTimer = 0;
-    let restoreAttempts = 0;
-    let saveTimer = 0;
+    try {
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'manual';
+      }
+    } catch {}
+  }, []);
+
+  // نتأكد إن الرابط (hash) دايمًا متطابق مع التبويب الحالي، بدون إضافة سجل جديد في التاريخ
+  useEffect(() => {
+    try {
+      if (window.location.hash.replace('#', '') !== currentTab) {
+        window.history.replaceState(null, '', `#${currentTab}`);
+      }
+    } catch {}
+  }, [currentTab]);
+
+  // حفظ واستعادة موضع السكرول لكل تبويب
+  useEffect(() => {
+    if (loading || !user?.uid) return undefined;
+
     const key = `mutabi_scroll_${currentTab}`;
+    let ready = false; // لا نحفظ أي موضع قبل ما الاستعادة تخلص (عشان ما نكتب فوق الموضع القديم)
+    let cancelled = false;
+    let attempts = 0;
+    let timer = 0;
+
+    let target = 0;
+    try {
+      const saved = Number(localStorage.getItem(key));
+      if (Number.isFinite(saved) && saved > 0) target = saved;
+    } catch {}
+
     const savePosition = () => {
+      if (!ready) return;
       try {
-        localStorage.setItem(key, String(window.scrollY));
-      } catch (error) {
-        console.warn('Could not save the page scroll position:', error);
-      }
-    };
-    const scheduleSave = () => {
-      window.clearTimeout(saveTimer);
-      saveTimer = window.setTimeout(savePosition, 150);
+        localStorage.setItem(key, String(Math.round(window.scrollY)));
+      } catch {}
     };
 
-    const restorePosition = () => {
-      try {
-        const savedPosition = Number(localStorage.getItem(key));
-        if (Number.isFinite(savedPosition) && savedPosition >= 0) {
-          window.scrollTo(0, savedPosition);
-          if (window.scrollY < savedPosition && restoreAttempts < 20) {
-            restoreAttempts++;
-            restoreTimer = window.setTimeout(restorePosition, 250);
-          }
-        }
-      } catch (error) {
-        console.warn('Could not restore the page scroll position:', error);
-      }
+    const finishRestore = () => {
+      ready = true;
+      window.clearTimeout(timer);
     };
 
-    restoreFrame = window.requestAnimationFrame(() => {
-      restoreFrame = window.requestAnimationFrame(restorePosition);
-    });
-    window.addEventListener('scroll', scheduleSave, { passive: true });
+    const tryRestore = () => {
+      if (cancelled || ready) return;
+      if (target <= 0) {
+        window.scrollTo(0, 0);
+        finishRestore();
+        return;
+      }
+      window.scrollTo(0, target);
+      attempts++;
+      // الصفحة بتتحمّل تدريجيًا (lazy + بيانات Firestore) فنكرر المحاولة لحد ما الطول يكفي
+      if (Math.abs(window.scrollY - target) < 4 || attempts >= 60) {
+        finishRestore();
+        return;
+      }
+      timer = window.setTimeout(tryRestore, 250);
+    };
+
+    // لو المستخدم لمس الشاشة أو سكرول بنفسه، نوقف الاستعادة فورًا
+    const onUserInteract = () => finishRestore();
+    const interactEvents = ['wheel', 'touchstart', 'mousedown', 'keydown'];
+    interactEvents.forEach((evt) =>
+      window.addEventListener(evt, onUserInteract, { passive: true, once: true })
+    );
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') savePosition();
+    };
+
+    const frame = window.requestAnimationFrame(tryRestore);
+    window.addEventListener('scroll', savePosition, { passive: true });
     window.addEventListener('pagehide', savePosition);
+    window.addEventListener('beforeunload', savePosition);
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      window.cancelAnimationFrame(restoreFrame);
-      window.clearTimeout(restoreTimer);
-      window.clearTimeout(saveTimer);
-      savePosition();
-      window.removeEventListener('scroll', scheduleSave);
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+      interactEvents.forEach((evt) => window.removeEventListener(evt, onUserInteract));
+      window.removeEventListener('scroll', savePosition);
       window.removeEventListener('pagehide', savePosition);
+      window.removeEventListener('beforeunload', savePosition);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [currentTab]);
+  }, [currentTab, loading, user?.uid]);
 
   useEffect(() => {
     if (loading || !user?.uid || !userDoc) return;
@@ -147,7 +198,10 @@ function MainApp() {
 
       refreshingPrayerTimesRef.current = refreshKey;
       try {
-        const prayerTimes = await fetchPrayerTimes(location.latitude, location.longitude);
+        const method = userDoc?.prayerMethod && userDoc.prayerMethod !== 'auto'
+          ? Number(userDoc.prayerMethod)
+          : getCalculationMethod(userDoc?.timezone);
+        const prayerTimes = await fetchPrayerTimes(location.latitude, location.longitude, new Date(), method, userDoc?.timezone);
         if (cancelled) return;
         const notifications = applyPrayerTimes(
           userDoc?.notifications || NOTIFICATION_DEFAULT_SETTINGS,
@@ -174,6 +228,8 @@ function MainApp() {
     user,
     userDoc?.prayerLocation?.latitude,
     userDoc?.prayerLocation?.longitude,
+    userDoc?.prayerMethod,
+    userDoc?.timezone,
     userDoc?.notifications?.prayerTimesDate,
   ]);
 
@@ -185,11 +241,22 @@ function MainApp() {
     } catch {}
   };
 
+  const handleNavigateToAdhkar = (category = 'morning') => {
+    setAdhkarInitialCategory(category);
+    handleSelectTab('adhkar');
+  };
+
+  // نحفظ التبويب الحالي دايمًا (حتى لو اتغير من زر الرجوع أو من الرابط)
+  useEffect(() => {
+    try {
+      localStorage.setItem('mutabi_active_tab', currentTab);
+    } catch {}
+  }, [currentTab]);
+
   React.useEffect(() => {
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '').trim();
-      const validTabs = ['today', 'tasbeeh', 'hadith', 'todos', 'progress', 'history', 'profile', 'admin'];
-      if (hash && validTabs.includes(hash)) {
+      if (hash && VALID_TABS.includes(hash)) {
         setCurrentTabState(hash);
       }
     };
@@ -252,7 +319,7 @@ function MainApp() {
         ...currentPrayers,
         [prayerKey]: {
           id: prayerKey,
-          title: `صلاة ${prayerKey}`,
+          title: `صلاة ${getPrayerArabicName(prayerKey)}`,
           status: 'prayed_jamaah',
           note: 'تسجيل سريع من إشعار دخول الوقت',
           updatedAt: new Date().toISOString(),
@@ -269,7 +336,7 @@ function MainApp() {
         performedCount,
         performedCount === 5,
         { prayers: updatedPrayers },
-        `تسجيل ${prayerKey} من التنبيه`
+        `تسجيل صلاة ${getPrayerArabicName(prayerKey)} من التنبيه`
       );
 
       if (updateUserDoc) {
@@ -393,10 +460,14 @@ function MainApp() {
               onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')}
               onNavigateToHadith={() => handleSelectTab('hadith')}
               onNavigateToTodos={() => handleSelectTab('todos')}
+              onNavigateToAdhkar={handleNavigateToAdhkar}
             />
           )}
           {currentTab === 'tasbeeh' && <TasbeehPage />}
+          {currentTab === 'adhkar' && <AdhkarPage initialCategory={adhkarInitialCategory} />}
+          {currentTab === 'salawat' && <SalatPage />}
           {currentTab === 'hadith' && <HadithPage />}
+          {currentTab === 'library' && <IslamicLibraryPage />}
           {currentTab === 'todos' && <TodosPage />}
           {currentTab === 'progress' && <Progress />}
           {currentTab === 'history' && <History />}
@@ -411,6 +482,7 @@ function MainApp() {
                 onNavigateToTasbeeh={() => handleSelectTab('tasbeeh')}
                 onNavigateToHadith={() => handleSelectTab('hadith')}
                 onNavigateToTodos={() => handleSelectTab('todos')}
+                onNavigateToAdhkar={handleNavigateToAdhkar}
               />
             )
           )}
@@ -432,6 +504,7 @@ export default function App() {
         <>
           <MainApp />
           <PWAInstallBanner />
+          <UpdateBanner />
         </>
       </AuthProvider>
     </ThemeProvider>

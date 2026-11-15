@@ -7,10 +7,7 @@ import {
   Check,
   ChevronDown,
   Save,
-  SunMedium,
-  Moon,
 } from 'lucide-react';
-import { AdhkarReaderModal } from './AdhkarReaderModal.jsx';
 
 export const COMPREHENSIVE_DHIKR_LIST = [
   { id: 'subhanallah', title: 'سُبْحَانَ اللَّهِ', meaning: 'تنزيه الله تعالى عن كل نقص وعيب' },
@@ -26,8 +23,6 @@ export const COMPREHENSIVE_DHIKR_LIST = [
   { id: 'hasbiyallah', title: 'حَسْبِيَ اللَّهُ وَنِعْمَ الْوَكِيلُ', meaning: 'تفويض الأمر لله والتوكل المطلق عليه' },
   { id: 'sayyid_istighfar', title: 'اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ', meaning: 'سيد الاستغفار وأعظم صيغ طلب التوبة' },
   { id: 'subhan_adad', title: 'سُبْحَانَ اللَّهِ عَدَدَ خَلْقِهِ، وَرِضَا نَفْسِهِ، وَزِنَةَ عَرْشِهِ، وَمِدَادَ كَلِمَاتِهِ', meaning: 'تسبيح مضاعف الأجر والثواب' },
-  { id: 'bismillah_la_yadurru', title: 'بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ', meaning: 'حفظ ووقاية من فجأة البلاء والشرور' },
-  { id: 'raditu_billah', title: 'رَضِيتُ بِاللَّهِ رَبّاً، وَبِالْإِسْلَامِ دِيناً، وَبِمُحَمَّدٍ ﷺ نَبِيّاً', meaning: 'وجبت له الجنة ورضا الله يوم القيامة' },
 ];
 
 const TARGETS = [
@@ -55,8 +50,6 @@ export function TasbeehCounter({
   const [savingSync, setSavingSync] = useState(false);
   const [syncedSuccess, setSyncedSuccess] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const [adhkarModalOpen, setAdhkarModalOpen] = useState(false);
-  const [adhkarModalCategory, setAdhkarModalCategory] = useState('morning');
   const saveQueueRef = useRef(Promise.resolve());
   const counterTouchedRef = useRef(false);
   const counterDateRef = useRef(todayStr);
@@ -206,73 +199,6 @@ export function TasbeehCounter({
         </div>
       )}
 
-      {/* Top Banner: Adhkar Quick Access */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        {/* Morning Adhkar Button */}
-        <div
-          onClick={() => {
-            setAdhkarModalCategory('morning');
-            setAdhkarModalOpen(true);
-          }}
-          className="p-4 sm:p-5 bg-gradient-to-l from-amber-500/10 via-amber-500/5 to-transparent border border-amber-300 dark:border-amber-800/80 rounded-3xl cursor-pointer hover:shadow-md transition-all flex items-center justify-between gap-4 select-none"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-amber-500/20">
-              <SunMedium className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-black text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-1.5">
-                <span>أذكار الصباح</span>
-                <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950 px-2 py-0.5 rounded-full">
-                  13 ذكراً
-                </span>
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                قراءة متأنية مع عدّاد تفاعلي لكل ذكر
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl shadow-2xs whitespace-nowrap cursor-pointer"
-          >
-            فتح وقراءة
-          </button>
-        </div>
-
-        {/* Evening Adhkar Button */}
-        <div
-          onClick={() => {
-            setAdhkarModalCategory('evening');
-            setAdhkarModalOpen(true);
-          }}
-          className="p-4 sm:p-5 bg-gradient-to-l from-indigo-500/10 via-indigo-500/5 to-transparent border border-indigo-300 dark:border-indigo-800/80 rounded-3xl cursor-pointer hover:shadow-md transition-all flex items-center justify-between gap-4 select-none"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-600/20">
-              <Moon className="w-6 h-6" />
-            </div>
-            <div>
-              <h4 className="font-black text-sm sm:text-base text-slate-900 dark:text-white flex items-center gap-1.5">
-                <span>أذكار المساء</span>
-                <span className="text-[10px] font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950 px-2 py-0.5 rounded-full">
-                  11 ذكراً
-                </span>
-              </h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                حصن المسلم والوقاية والسكينة
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-2xs whitespace-nowrap cursor-pointer"
-          >
-            فتح وقراءة
-          </button>
-        </div>
-      </div>
-
       {/* Main Tasbeeh Counter Card */}
       <div className="bg-white dark:bg-slate-900 border border-emerald-200/90 dark:border-slate-800 rounded-3xl p-5 sm:p-7 shadow-sm relative overflow-hidden transition-all text-right">
         {/* Ambient background blur */}
@@ -332,7 +258,9 @@ export function TasbeehCounter({
           </label>
           <button
             type="button"
-            onClick={() => setShowDhikrMenu(!showDhikrMenu)}
+            onClick={() => setShowDhikrMenu((isOpen) => !isOpen)}
+            aria-expanded={showDhikrMenu}
+            aria-controls="tasbeeh-dhikr-menu"
             className="w-full p-4 bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-200 dark:border-slate-700 hover:border-emerald-500 rounded-2xl flex items-center justify-between gap-3 text-right transition-all shadow-2xs cursor-pointer"
           >
             <div className="min-w-0 flex-1">
@@ -353,7 +281,7 @@ export function TasbeehCounter({
 
           {/* Full Dhikr Dropdown Menu */}
           {showDhikrMenu && (
-            <div className="absolute top-full inset-x-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2.5 max-h-80 overflow-y-auto animate-in fade-in">
+            <div id="tasbeeh-dhikr-menu" className="absolute top-full inset-x-0 mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2.5 max-h-80 overflow-y-auto animate-in fade-in">
               <div className="space-y-1">
                 {COMPREHENSIVE_DHIKR_LIST.map((d) => (
                   <button
@@ -513,16 +441,7 @@ export function TasbeehCounter({
         </div>
       </div>
 
-      {/* Adhkar Reader Modal */}
-      <AdhkarReaderModal
-        isOpen={adhkarModalOpen}
-        onClose={() => setAdhkarModalOpen(false)}
-        initialCategory={adhkarModalCategory}
-        todayStr={todayStr}
-        onCompleteCategory={(catTitle) => {
-          return onSaveCount ? onSaveCount(1, catTitle) : undefined;
-        }}
-      />
+
     </div>
   );
 }

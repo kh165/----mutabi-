@@ -14,7 +14,6 @@ import { useAuth } from '../context/AuthContext.jsx';
 import {
   enqueueOfflineAction,
   removeOfflineAction,
-  syncPendingOfflineData,
   getOfflineQueue,
 } from '../lib/offlineSync.js';
 import { settleOrTimeout } from '../lib/async.js';
@@ -110,18 +109,6 @@ export function useLogs(targetUid) {
     return () => unsubscribe();
   }, [effectiveUid]);
 
-  // مزامنة تلقائية عند رجوع الاتصال
-  useEffect(() => {
-    const handleOnline = () => {
-      syncPendingOfflineData();
-    };
-    window.addEventListener('online', handleOnline);
-    if (navigator.onLine) {
-      syncPendingOfflineData();
-    }
-    return () => window.removeEventListener('online', handleOnline);
-  }, []);
-
   const saveLog = useCallback(
     async (activityId, date, amount, completed, details, note) => {
       if (!effectiveUid) return;
@@ -159,6 +146,7 @@ export function useLogs(targetUid) {
           type: 'SAVE_LOG',
           key: `LOG_${logId}`,
           logId,
+          isNew: !previousLog,
           data: logData,
         });
         return logData;
@@ -172,10 +160,16 @@ export function useLogs(targetUid) {
             ref,
             {
               ...logData,
-              createdAt: serverTimestamp(),
+              ...(previousLog ? {} : { createdAt: serverTimestamp() }),
               updatedAt: serverTimestamp(),
             },
-            { merge: true }
+            {
+              mergeFields: [
+                'id', 'uid', 'activityId', 'date', 'amount', 'completed',
+                'details', 'note', 'updatedAt',
+                ...(!previousLog ? ['createdAt'] : []),
+              ],
+            }
           ),
           4000
         );
@@ -186,6 +180,7 @@ export function useLogs(targetUid) {
             type: 'SAVE_LOG',
             key: `LOG_${logId}`,
             logId,
+            isNew: !previousLog,
             data: logData,
           });
         } else {
@@ -199,6 +194,7 @@ export function useLogs(targetUid) {
             type: 'SAVE_LOG',
             key: `LOG_${logId}`,
             logId,
+            isNew: !previousLog,
             data: logData,
           });
           return logData;
@@ -232,6 +228,7 @@ export function useLogs(targetUid) {
           type: 'DELETE_LOG',
           key: `LOG_${logId}`,
           logId,
+          uid: effectiveUid,
         });
         return;
       }
@@ -247,6 +244,7 @@ export function useLogs(targetUid) {
             type: 'DELETE_LOG',
             key: `LOG_${logId}`,
             logId,
+            uid: effectiveUid,
           });
         } else {
           removeOfflineAction(`LOG_${logId}`);
@@ -258,6 +256,7 @@ export function useLogs(targetUid) {
             type: 'DELETE_LOG',
             key: `LOG_${logId}`,
             logId,
+            uid: effectiveUid,
           });
           return;
         }

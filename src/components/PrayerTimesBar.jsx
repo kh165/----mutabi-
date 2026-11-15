@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import {
   fetchPrayerTimes,
+  getCalculationMethod,
   requestCurrentPosition,
   getLocalDateKey,
   applyPrayerTimes,
@@ -28,13 +29,14 @@ import {
   playNotificationTone,
   NOTIFICATION_DEFAULT_SETTINGS,
 } from '../lib/notifications.js';
+import { registerFcmToken } from '../lib/fcm.js';
 
 const PRAYERS_LIST = [
-  { id: 'fajr', name: 'الفجر', icon: Sunrise, defaultTime: '04:45' },
-  { id: 'dhuhr', name: 'الظهر', icon: Sun, defaultTime: '12:00' },
-  { id: 'asr', name: 'العصر', icon: SunMedium, defaultTime: '15:15' },
-  { id: 'maghrib', name: 'المغرب', icon: Sunset, defaultTime: '17:45' },
-  { id: 'isha', name: 'العشاء', icon: Moon, defaultTime: '19:15' },
+  { id: 'fajr', name: 'الفجر', icon: Sunrise },
+  { id: 'dhuhr', name: 'الظهر', icon: Sun },
+  { id: 'asr', name: 'العصر', icon: SunMedium },
+  { id: 'maghrib', name: 'المغرب', icon: Sunset },
+  { id: 'isha', name: 'العشاء', icon: Moon },
 ];
 
 export function PrayerTimesBar({ userDoc, updateUserDoc }) {
@@ -52,14 +54,17 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
 
   const savedTimes = userDoc?.notifications || {};
   const location = userDoc?.prayerLocation;
+  const hasCurrentPrayerTimes = Boolean(
+    location && savedTimes.prayerTimesDate === getLocalDateKey()
+  );
 
   // Extract times for today
   const prayerTimes = {
-    fajr: savedTimes.fajr?.time || '04:45',
-    dhuhr: savedTimes.dhuhr?.time || '12:00',
-    asr: savedTimes.asr?.time || '15:15',
-    maghrib: savedTimes.maghrib?.time || '17:45',
-    isha: savedTimes.isha?.time || '19:15',
+    fajr: savedTimes.fajr?.time || '--:--',
+    dhuhr: savedTimes.dhuhr?.time || '--:--',
+    asr: savedTimes.asr?.time || '--:--',
+    maghrib: savedTimes.maghrib?.time || '--:--',
+    isha: savedTimes.isha?.time || '--:--',
   };
 
   // Convert "HH:MM" to minutes of day
@@ -76,6 +81,7 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
   let minutesToNext = Infinity;
 
   for (const p of PRAYERS_LIST) {
+    if (!hasCurrentPrayerTimes || !/^\d{2}:\d{2}$/.test(prayerTimes[p.id])) continue;
     const pMinutes = toMinutes(prayerTimes[p.id]);
     const diff = pMinutes - currentMinutes;
     if (diff > 0 && diff < minutesToNext) {
@@ -85,7 +91,7 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
   }
 
   // If all prayers today have passed, next is tomorrow's Fajr
-  if (!nextPrayer) {
+  if (!nextPrayer && hasCurrentPrayerTimes && /^\d{2}:\d{2}$/.test(prayerTimes.fajr)) {
     const fajrMin = toMinutes(prayerTimes.fajr);
     const diff = 24 * 60 - currentMinutes + fajrMin;
     nextPrayer = {
@@ -97,14 +103,14 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
   }
 
   // Determine current active prayer
-  let activePrayerId = 'isha';
-  if (currentMinutes >= toMinutes(prayerTimes.fajr) && currentMinutes < toMinutes(prayerTimes.dhuhr)) {
+  let activePrayerId = hasCurrentPrayerTimes ? 'isha' : null;
+  if (hasCurrentPrayerTimes && currentMinutes >= toMinutes(prayerTimes.fajr) && currentMinutes < toMinutes(prayerTimes.dhuhr)) {
     activePrayerId = 'fajr';
-  } else if (currentMinutes >= toMinutes(prayerTimes.dhuhr) && currentMinutes < toMinutes(prayerTimes.asr)) {
+  } else if (hasCurrentPrayerTimes && currentMinutes >= toMinutes(prayerTimes.dhuhr) && currentMinutes < toMinutes(prayerTimes.asr)) {
     activePrayerId = 'dhuhr';
-  } else if (currentMinutes >= toMinutes(prayerTimes.asr) && currentMinutes < toMinutes(prayerTimes.maghrib)) {
+  } else if (hasCurrentPrayerTimes && currentMinutes >= toMinutes(prayerTimes.asr) && currentMinutes < toMinutes(prayerTimes.maghrib)) {
     activePrayerId = 'asr';
-  } else if (currentMinutes >= toMinutes(prayerTimes.maghrib) && currentMinutes < toMinutes(prayerTimes.isha)) {
+  } else if (hasCurrentPrayerTimes && currentMinutes >= toMinutes(prayerTimes.maghrib) && currentMinutes < toMinutes(prayerTimes.isha)) {
     activePrayerId = 'maghrib';
   }
 
@@ -113,7 +119,10 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
     setErrorMsg(null);
     try {
       const coords = await requestCurrentPosition();
-      const times = await fetchPrayerTimes(coords.latitude, coords.longitude);
+      const method = userDoc?.prayerMethod && userDoc.prayerMethod !== 'auto'
+        ? Number(userDoc.prayerMethod)
+        : getCalculationMethod(userDoc?.timezone);
+      const times = await fetchPrayerTimes(coords.latitude, coords.longitude, new Date(), method, userDoc?.timezone);
       const dateKey = getLocalDateKey();
       const updatedNotifications = applyPrayerTimes(
         userDoc?.notifications || NOTIFICATION_DEFAULT_SETTINGS,
@@ -144,6 +153,7 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
     setPermissionStatus(newStatus);
 
     if (res.granted) {
+      try { await registerFcmToken(userDoc); } catch (fcmError) { console.warn('FCM registration unavailable:', fcmError); }
       if (updateUserDoc) {
         const currentNotifs = userDoc?.notifications || NOTIFICATION_DEFAULT_SETTINGS;
         await updateUserDoc({
@@ -157,7 +167,7 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
       // Send a welcoming confirmation notification to test mobile reception
       await sendLocalNotification(
         'تم تفعيل تنبيهات الصلاة بنجاح 🕌',
-        'ستصلك إشعارات الأذان مباشرة على شاشة هاتفك عند دخول وقت كل صلاة بإذن الله.',
+        'تظهر التنبيهات أثناء فتح التطبيق أو في الخلفية القريبة، حسب دعم المتصفح؛ لا تعمل كخدمة Push والهاتف مغلق تمامًا.',
         'welcome_notif'
       );
     }
@@ -229,7 +239,7 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
               )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              مواقيت دقيقة محسوبة فلكياً مع تنبيهات الأذان الحي على الهاتف.
+              مواقيت محسوبة فلكيًا من موقعك، والتنبيهات المحلية تعمل أثناء فتح التطبيق أو في الخلفية القريبة.
             </p>
           </div>
         </div>
@@ -302,6 +312,12 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
         </div>
       )}
 
+      {!hasCurrentPrayerTimes && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          {location ? 'لم تُحدَّث مواقيت اليوم بعد. اضغط تحديث الموقع لإعادة جلبها.' : 'المواقيت الظاهرة تقديرية، اضغط تحديد موقعي لحساب المواقيت الصحيحة.'}
+        </p>
+      )}
+
       {/* Active & Next Prayer Highlight Banner */}
       {nextPrayer && (
         <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl p-2.5 sm:p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
@@ -324,7 +340,7 @@ export function PrayerTimesBar({ userDoc, updateUserDoc }) {
         {PRAYERS_LIST.map((prayer) => {
           const Icon = prayer.icon;
           const time = prayerTimes[prayer.id];
-          const isCurrentActive = activePrayerId === prayer.id;
+          const isCurrentActive = hasCurrentPrayerTimes && activePrayerId === prayer.id;
           const isNext = nextPrayer?.id === prayer.id;
 
           return (

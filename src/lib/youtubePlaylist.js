@@ -1,7 +1,7 @@
 /**
  * YouTube playlist / video metadata helper.
  * 1) noembed / YouTube oEmbed (فوري وبدون أي قيود أو مفاتيح) لجلب عنوان الفيديو والقائمة
- * 2) مشغّل YouTube IFrame خفي لقياس مدة الفيديو بدقة وحفظها في Realtime Database
+ * 2) مشغّل YouTube IFrame خفي لقياس مدة الفيديو بدقة
  * 3) دعم إضافة مفتاح اختياري VITE_YOUTUBE_API_KEY لو رغب المستخدم
  */
 

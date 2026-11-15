@@ -1,0 +1,24 @@
+{
+  "source": "ويكي مصدر العربية",
+  "license": "CC BY-SA 4.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+  "books": [
+    {
+      "id": "seerah-halabi",
+      "title": "السيرة الحلبية",
+      "author": "علي بن برهان الدين الحلبي",
+      "volumes": [
+        {"id": "seerah-halabi-1", "title": "الجزء الأول", "url": "https://ar.wikisource.org/wiki/السيرة_الحلبية/الجزء_الأول"},
+        {"id": "seerah-halabi-2", "title": "الجزء الثاني", "url": "https://ar.wikisource.org/wiki/السيرة_الحلبية/الجزء_الثاني"},
+        {"id": "seerah-halabi-3", "title": "الجزء الثالث", "url": "https://ar.wikisource.org/wiki/السيرة_الحلبية/الجزء_الثالث"},
+        {"id": "seerah-halabi-4", "title": "الجزء الرابع", "url": "https://ar.wikisource.org/wiki/السيرة_الحلبية/الجزء_الرابع"}
+      ]
+    },
+    {
+      "id": "jala-al-afham",
+      "title": "جلاء الأفهام في فضل الصلاة والسلام على محمد خير الأنام",
+      "author": "ابن قيم الجوزية",
+      "url": "https://ar.wikisource.org/wiki/كتاب_جلاء_الأفهام"
+    }
+  ]
+}

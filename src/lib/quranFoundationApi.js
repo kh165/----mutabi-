@@ -17,6 +17,14 @@ const memoryVersesCache = new Map();
 let memoryChaptersCache = null;
 const QURAN_CACHE_NAME = 'quran-text-cache';
 
+
+async function fetchAlQuranCloudChapter(chapterId) {
+  const response = await fetch(`https://api.alquran.cloud/v1/surah/${chapterId}/quran-uthmani`, { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`api.alquran.cloud returned HTTP ${response.status}.`);
+  const data = await response.json();
+  if (!Array.isArray(data?.data?.ayahs) || !data.data.ayahs.length) throw new Error('Alternative Quran API returned no verses.');
+  return data.data.ayahs.map((ayah) => ({ number: Number(ayah.numberInSurah), verseNumber: Number(ayah.numberInSurah), text: ayah.text.trim(), verseKey: `${chapterId}:${ayah.numberInSurah}`, pageNumber: Number(ayah.page) || null, juzNumber: Number(ayah.juz) || null, hizbNumber: null, rubElHizbNumber: null }));
+}
 async function fetchCachedQuranJson(url, signal) {
   const cache = typeof caches !== 'undefined'
     ? await caches.open(QURAN_CACHE_NAME)
@@ -176,6 +184,16 @@ export async function getChapterVerses(chapterNumber) {
     memoryVersesCache.set(chapterId, result);
     return result;
   } catch (err) {
+    try {
+      const fallbackAyahs = await fetchAlQuranCloudChapter(chapterId);
+      const chapters = await getQuranChapters();
+      const chMeta = chapters.find((chapter) => chapter.number === chapterId) || SURAHS.find((surah) => surah.number === chapterId) || {};
+      const fallbackResult = { number: chapterId, name: chMeta.name || chMeta.nameArabic || `سورة ${chapterId}`, englishName: chMeta.englishName || '', revelationType: chMeta.type === 'meccan' ? 'مكية' : 'مدنية', ayahsCount: fallbackAyahs.length, bismillahPre: chapterId !== 1 && chapterId !== 9, ayahs: fallbackAyahs };
+      memoryVersesCache.set(chapterId, fallbackResult);
+      return fallbackResult;
+    } catch (fallbackError) {
+      console.warn(`Alternative Quran API also failed for chapter ${chapterId}:`, fallbackError);
+    }
     if (err?.name !== 'AbortError') {
       console.warn(`Quran Foundation API request failed for chapter ${chapterId}:`, err);
     }

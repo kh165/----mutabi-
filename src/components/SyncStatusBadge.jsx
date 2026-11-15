@@ -20,10 +20,29 @@ export function SyncStatusBadge({ onOpenOfflineModal }) {
   const [syncToast, setSyncToast] = useState(null);
   const [packageStatus, setPackageStatus] = useState(getOfflinePackageStatus);
 
+  const showSyncError = (error) => {
+    console.error('Offline sync request failed:', error);
+    const retryable =
+      !navigator.onLine ||
+      ['unavailable', 'deadline-exceeded', 'network-request-failed', 'timeout', 'failed-precondition']
+        .includes(error?.code);
+    setSyncToast({
+      message: retryable
+        ? 'الاتصال بالخادم غير مستقر. ستتم إعادة محاولة المزامنة تلقائيًا.'
+        : 'تعذرت المزامنة. تحقق من صلاحيات الحساب ثم أعد المحاولة.',
+      isError: true,
+    });
+  };
+
   const showSyncResult = (result) => {
-    if (result.failed > 0) {
+    if (result.failed > 0 && result.retryable > 0) {
       setSyncToast({
-        message: `تعذر رفع ${result.failed} عملية. تحقق من الاتصال أو صلاحيات الحساب.`,
+        message: 'الاتصال بالخادم غير مستقر. ستتم إعادة محاولة المزامنة تلقائيًا.',
+        isError: true,
+      });
+    } else if (result.failed > 0) {
+      setSyncToast({
+        message: `تعذر رفع ${result.failed} عملية. تحقق من صلاحيات الحساب ثم أعد المحاولة.`,
         isError: true,
       });
     } else if (result.pending > 0) {
@@ -43,23 +62,13 @@ export function SyncStatusBadge({ onOpenOfflineModal }) {
     if (!user?.uid || !navigator.onLine) return;
     syncPendingOfflineData()
       .then(showSyncResult)
-      .catch((error) => {
-        console.error('Initial offline sync failed:', error);
-        setSyncToast({ message: 'تعذرت المزامنة. حاول مرة أخرى.', isError: true });
-      });
+      .catch(showSyncError);
   }, [user?.uid]);
 
   useEffect(() => {
-    const handleOnline = async () => {
+    const handleOnline = () => {
       setIsOnline(true);
-      try {
-        const res = await syncPendingOfflineData();
-        setPendingCount(res.pending);
-        showSyncResult(res);
-      } catch (error) {
-        console.error('Automatic offline sync failed:', error);
-        setSyncToast({ message: 'تعذرت المزامنة. حاول مرة أخرى.', isError: true });
-      }
+      setPendingCount(getOfflineQueue().length);
     };
 
     const handleOffline = () => {
@@ -80,6 +89,7 @@ export function SyncStatusBadge({ onOpenOfflineModal }) {
           synced: e.detail?.syncedCount || 0,
           pending: e.detail?.pendingCount || 0,
           failed: e.detail?.failedCount || 0,
+          retryable: e.detail?.retryableCount || 0,
         });
       }
     };
@@ -109,8 +119,7 @@ export function SyncStatusBadge({ onOpenOfflineModal }) {
       setPendingCount(result.pending);
       showSyncResult(result);
     } catch (error) {
-      console.error('Manual offline sync failed:', error);
-      setSyncToast({ message: 'تعذرت المزامنة. حاول مرة أخرى.', isError: true });
+      showSyncError(error);
     }
   };
 

@@ -5,6 +5,8 @@ import { TOTAL_PAGES } from '../data/quran.js';
  * Calculate user streaks based on daily completions.
  * A day counts towards the streak if at least one activity was completed on that day.
  */
+/** @param {Array<Object>} logs @param {string} todayStr @returns {{currentStreak:number,longestStreak:number,activeDates:Set<string>}} */
+/** @param {Array<Object>} logs @param {string} todayStr @returns {Object} */
 export function calculateStreaks(logs = [], todayStr = getTodayDateString()) {
   const completedDates = new Set();
   for (const log of logs) {
@@ -67,6 +69,8 @@ export function calculateStreaks(logs = [], todayStr = getTodayDateString()) {
 /**
  * Calculate Quran Khatma metrics from reading logs.
  */
+/** @param {Array<Object>} logs @param {Array<Object>} readActivities @returns {Object} */
+/** @param {Array<Object>} logs @param {Array<Object>} readActivities @returns {Object} */
 export function calculateKhatma(logs = [], readActivities = []) {
   const readActivityIds = new Set(
     readActivities.filter(a => a.type === 'read').map(a => a.id)

@@ -96,7 +96,7 @@ export function PrayersTrackerCard({
         targetStatus ? `تسجيل ${prayer.title}` : `إلغاء تسجيل ${prayer.title}`
       );
     } catch (err) {
-      console.error('Error updating prayer in Realtime Database:', err);
+      console.error('Error updating prayer in Cloud Firestore:', err);
     } finally {
       setSavingPrayerId(null);
     }
@@ -148,7 +148,7 @@ export function PrayersTrackerCard({
             <span>متابعة الصلوات الخمس اليومية 🕌</span>
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            سجّل كل صلاة فور أدائها (جماعة / منفرداً / فائتة مع ذكر السبب). يتم الحفظ تلقائياً في Realtime Database.
+            سجّل كل صلاة فور أدائها (جماعة / منفرداً / فائتة مع ذكر السبب). يتم الحفظ تلقائياً في حسابك عبر Cloud Firestore.
           </p>
         </div>
 
@@ -345,7 +345,7 @@ export function PrayersTrackerCard({
                       onClick={() => handleSaveNote(prayer.id)}
                       className="w-full py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold cursor-pointer transition-colors"
                     >
-                      {isSaving ? 'جارٍ الحفظ...' : 'حفظ الملاحظة في Realtime Database'}
+                      {isSaving ? 'جارٍ الحفظ...' : 'حفظ الملاحظة في الحساب'}
                     </button>
                   </div>
                 )}

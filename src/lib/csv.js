@@ -5,12 +5,20 @@
 export function exportToCSV(filename, headers, rows) {
   // Add UTF-8 BOM so Excel opens Arabic correctly
   const BOM = '\uFEFF';
+  const formatCell = value => {
+    const text = String(value ?? '');
+    // An apostrophe at the start forces Excel to treat formula-like text as text.
+    const safeText = typeof value === 'string' && /^\s*[=+\-@]/u.test(text)
+      ? `'${text}`
+      : text;
+    return `"${safeText.replace(/"/g, '""')}"`;
+  };
   const csvContent =
     BOM +
     [
-      headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','),
+      headers.map(formatCell).join(','),
       ...rows.map(row =>
-        row.map(val => `"${String(val ?? '').replace(/"/g, '""')}"`).join(',')
+        row.map(formatCell).join(',')
       ),
     ].join('\r\n');
 

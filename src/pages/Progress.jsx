@@ -187,7 +187,7 @@ export function Progress() {
       </div>
 
       {/* Monthly Worship Calendar in Progress Tab */}
-      <MonthlyWorshipCalendar logs={logs} activities={activities} />
+      <MonthlyWorshipCalendar logs={logs} activities={activities} todayStr={todayStr} />
 
       {/* Weekly Breakdown Chart (Recharts) */}
       <WeeklyWorshipChart weeklyData={weeklyData} isDark={isDark} />

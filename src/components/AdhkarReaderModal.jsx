@@ -44,6 +44,7 @@ export function AdhkarReaderModal({
   initialCategory = 'morning',
   todayStr,
   onCompleteCategory,
+  fullPage = false,
 }) {
   const { user, userDoc } = useAuth();
   // لو الصفحة اللي فتحت المودال ما بعتتش التاريخ نحسبه هنا، عشان التقدم يتسجل في Firestore دايمًا
@@ -335,19 +336,25 @@ export function AdhkarReaderModal({
       case 'relief': return <Heart className="w-4 h-4 text-rose-500" />;
       case 'prophetic': return <BookOpenCheck className="w-4 h-4 text-amber-400" />;
       case 'ruqyah': return <Shield className="w-4 h-4 text-teal-500" />;
+      case 'food': return <Compass className="w-4 h-4 text-orange-500" />;
+      case 'social': return <Heart className="w-4 h-4 text-pink-500" />;
+      case 'health': return <Shield className="w-4 h-4 text-rose-500" />;
+      case 'wind': return <SunMedium className="w-4 h-4 text-sky-500" />;
+      case 'travel': return <Compass className="w-4 h-4 text-blue-500" />;
+      case 'mosque': return <BookOpenCheck className="w-4 h-4 text-emerald-500" />;
       default: return <Clock className="w-4 h-4 text-purple-400" />;
     }
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in"
+      className={fullPage ? 'w-full py-6 sm:py-8' : 'fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in'}
       dir="rtl"
-      role="dialog"
-      aria-modal="true"
+      role={fullPage ? undefined : 'dialog'}
+      aria-modal={fullPage ? undefined : 'true'}
       aria-label="موسوعة الأذكار والأدعية النبوية"
     >
-      <div className="w-full max-w-4xl h-[94vh] max-h-[94vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-right">
+      <div className={fullPage ? 'w-full min-h-[75vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm flex flex-col overflow-hidden text-right' : 'w-full max-w-4xl h-[94vh] max-h-[94vh] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-right'}>
         {/* Header Bar */}
         <header className="px-4 sm:px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 shrink-0 bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md">
           <div className="flex items-center gap-3 min-w-0">
@@ -387,7 +394,7 @@ export function AdhkarReaderModal({
               </button>
             </div>
 
-            <button
+            {!fullPage && (<button
               type="button"
               onClick={onClose}
               className="w-9 h-9 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 hover:text-white text-slate-600 dark:text-slate-300 flex items-center justify-center transition cursor-pointer"
@@ -396,6 +403,7 @@ export function AdhkarReaderModal({
             >
               <X className="w-5 h-5" />
             </button>
+            )}
           </div>
         </header>
 
@@ -405,7 +413,7 @@ export function AdhkarReaderModal({
             <Search className="w-4 h-4 text-slate-400 absolute start-3.5 top-3 pointer-events-none" />
             <input
               type="text"
-              placeholder="ابحث في جميع الأذكار والأدعية (مثال: كرب، دين، سفر، مطر، نوم، استخارة، شفاء...)"
+              placeholder="ابحث في جميع الأذكار والأدعية (مثال: طعام، عطاس، مجلس، ريح، سفر، نوم، استخارة، شفاء...)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full ps-10 pe-9 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -422,7 +430,7 @@ export function AdhkarReaderModal({
           </div>
 
           {!searchQuery && (
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 pb-1">
               {ADHKAR_CATEGORIES.map((cat) => {
                 const isActive = activeCategoryId === cat.id;
                 return (
@@ -430,7 +438,7 @@ export function AdhkarReaderModal({
                     key={cat.id}
                     type="button"
                     onClick={() => setActiveCategoryId(cat.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap cursor-pointer shrink-0 ${
+                    className={`min-h-10 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-start gap-1.5 text-right cursor-pointer ${
                       isActive
                         ? 'bg-emerald-600 text-white shadow-2xs'
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -578,9 +586,21 @@ export function AdhkarReaderModal({
                     )}
 
                     {item.source && (
-                      <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium shrink-0">
-                        تخريج: {item.source}
-                      </span>
+                      item.sourceUrl ? (
+                        <a
+                          href={item.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          className="text-[11px] text-slate-500 dark:text-slate-400 font-medium underline decoration-slate-300 underline-offset-2 hover:text-emerald-700 dark:hover:text-emerald-300 shrink-0"
+                        >
+                          تخريج: {item.source}
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium shrink-0">
+                          تخريج: {item.source}
+                        </span>
+                      )
                     )}
                   </div>
                 </div>
@@ -601,7 +621,7 @@ export function AdhkarReaderModal({
                 type="button"
                 onClick={() => {
                   onCompleteCategory(activeCategory.title);
-                  onClose();
+                  if (!fullPage) onClose?.();
                 }}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer"
                 title="تسجيل إنجاز أذكار هذا القسم في الورد واحتساب النقاط"
@@ -611,13 +631,14 @@ export function AdhkarReaderModal({
               </button>
             )}
 
-            <button
+            {!fullPage && (<button
               type="button"
               onClick={onClose}
               className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
             >
               إغلاق
             </button>
+            )}
           </div>
         </footer>
       </div>

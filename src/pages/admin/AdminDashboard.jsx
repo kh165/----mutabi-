@@ -7,6 +7,7 @@ import { useEncouragements } from '../../hooks/useEncouragements.js';
 import { useItemProgress } from '../../hooks/useItemProgress.js';
 import { exportToCSV } from '../../lib/csv.js';
 import { getTodayDateString, formatArabicDate } from '../../lib/dates.js';
+import { getPrayerArabicName } from '../../lib/prayerNames.js';
 import { calculateStreaks, calculateKhatma } from '../../lib/stats.js';
 import { evaluateBadges } from '../../lib/badges.js';
 import { getSurah, TOTAL_PAGES } from '../../data/quran.js';
@@ -39,6 +40,7 @@ import {
   UserCheck,
   Quote,
   MessageSquareHeart,
+  Heart,
   Video,
   ArrowUp,
   ArrowDown,
@@ -143,6 +145,7 @@ export function AdminDashboard() {
     loading: loadingSelectedUserNotes,
     error: selectedUserNotesError,
     sendNote,
+    markReplyAsRead,
   } = useAdminNotes(selectedUser?.uid);
   const [userLogs, setUserLogs] = useState([]);
   const [loadingUserLogs, setLoadingUserLogs] = useState(false);
@@ -151,6 +154,17 @@ export function AdminDashboard() {
   const [loadingAdhkarProgress, setLoadingAdhkarProgress] = useState(false);
   const [adhkarProgressError, setAdhkarProgressError] = useState(null);
   const [inspectionDate, setInspectionDate] = useState(() => getTodayDateString());
+
+  useEffect(() => {
+    if (!isAdmin || !selectedUser?.uid) return;
+    selectedUserNotes.forEach((note) => {
+      if (note.reply && note.reply.fromUid === selectedUser.uid && !note.reply.isRead) {
+        void markReplyAsRead(note.id).catch((error) => {
+          console.error('Failed to mark the user reply as read:', error);
+        });
+      }
+    });
+  }, [isAdmin, markReplyAsRead, selectedUser?.uid, selectedUserNotes]);
 
   // Note sending state
   const [noteText, setNoteText] = useState('');
@@ -815,7 +829,7 @@ export function AdminDashboard() {
                                           }`}
                                         >
                                           <div className="font-bold flex items-center justify-between">
-                                            <span>{p.title}</span>
+                                            <span>صلاة {getPrayerArabicName(p.id, p.title)}</span>
                                             <span>{isJamaah ? 'جماعة ✓' : isIndiv ? 'منفرداً ✓' : isMissed ? 'لم أصلِّ ✕' : '—'}</span>
                                           </div>
                                           {p.note && (

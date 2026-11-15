@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { SURAHS, TOTAL_PAGES } from '../data/quran.js';
 import { getSurahAyahs, getSurahTafseer } from '../data/quranTexts.js';
 import { searchQuran } from '../lib/quranFoundationApi.js';
@@ -23,10 +24,19 @@ import {
   Volume2,
   Maximize2,
   BookMarked,
+  Bookmark,
+  BookmarkCheck,
   Type,
   ChevronDown,
   Search,
 } from 'lucide-react';
+
+// علامة عند الآية التي تُتلى الآن: معطّلة افتراضياً (لا مربعات ولا ألوان).
+// لو حبيت تلوين خفيف للنص فقط (بدون أي مربع) غيّرها إلى true.
+const SHOW_PLAYING_TINT = false;
+
+// مفتاح حفظ حالة "المصحف مفتوح" لإعادة فتحه بعد الريلود (يقرأه Shell.jsx)
+const QURAN_OPEN_KEY = 'mutabi_quran_open';
 
 function getSurahForPage(pageNumber) {
   return SURAHS.reduce(
@@ -56,47 +66,49 @@ function getSavedReadingPosition() {
   return null;
 }
 
-// Authentic Uthmani Calligraphy Typefaces optimized for reader eye comfort
-export const UTHMANI_FONTS = [
-  {
-    id: 'hafs',
-    name: 'مصحف حفص (عثماني أصيل)',
-    shortName: 'حفص عثماني',
-    className: 'font-quran-hafs',
-    fontFamily: "'Amiri Quran', 'Amiri', serif",
-    description: 'الرسم العثماني الملكي المعتمد بمجمع الملك فهد لطباعة المصحف الشريف مع ضبط التشكيل وعلامات الوقف الدقيقة.',
-  },
-  {
-    id: 'scheherazade',
-    name: 'النسخ العثماني الميسر (Scheherazade)',
-    shortName: 'نسخ ميسر',
-    className: 'font-quran-scheherazade',
-    fontFamily: "'Scheherazade New', 'Amiri', serif",
-    description: 'خط عثماني واسع ومريح جداً للعين ومصمم خصيصاً للقراءة المتواصلة دون إجهاد بصري.',
-  },
-  {
-    id: 'naskh',
-    name: 'النسخ القرآني فائق الوضوح (Noto Naskh)',
-    shortName: 'نسخ واضح',
-    className: 'font-quran-naskh',
-    fontFamily: "'Noto Naskh Arabic', serif",
-    description: 'خط عربي حديث عالي الدقة والوضوح لجميع أحجام الشاشات وتسهيل قراءة الحركات.',
-  },
-  {
-    id: 'amiri',
-    name: 'الأميري المصحفي (Amiri Classic)',
-    shortName: 'أميري كلاسيكي',
-    className: 'font-quran-amiri',
-    fontFamily: "'Amiri', serif",
-    description: 'الخط الطباعي المصري التراثي المأخوذ من مصحف الملك فؤاد التاريخي.',
-  },
-];
+function getSavedBookmark() {
+  try {
+    const raw = localStorage.getItem('mutabi_quran_bookmark');
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (
+      Number.isInteger(data?.surahNumber) &&
+      data.surahNumber >= 1 &&
+      data.surahNumber <= 114 &&
+      Number.isInteger(data?.pageNumber) &&
+      data.pageNumber >= 1 &&
+      data.pageNumber <= TOTAL_PAGES
+    ) {
+      return data;
+    }
+  } catch (e) {
+    console.warn('Could not read saved bookmark:', e);
+  }
+  return null;
+}
 
+// يفصل كل مستمعي الأحداث عن عنصر الصوت ثم يوقفه، حتى لا تتداخل حالات الأحداث القديمة مع الجديدة
+function detachAudio(audio) {
+  if (!audio) return;
+  audio.onplay = null;
+  audio.onpause = null;
+  audio.onended = null;
+  audio.onerror = null;
+  try {
+    audio.pause();
+  } catch {
+    // ignore
+  }
+}
+
+// Authoritative Reciters (القرّاء المعتمدون: الحصري، العفاسي، المنشاوي)
+import { RECITERS, UTHMANI_FONTS } from './quran/constants.js';
+export { RECITERS, UTHMANI_FONTS };
 export function QuranReaderModal({
   isOpen,
   onClose,
   initialSurahNumber = 1,
-  onLogPagesRead,
+  onLogPagesRead = async (..._pageData) => {},
 }) {
   const savedPositionRef = useRef(getSavedReadingPosition());
   const [selectedSurah, setSelectedSurah] = useState(() => {
@@ -119,12 +131,39 @@ export function QuranReaderModal({
   const [tafseerError, setTafseerError] = useState(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const audioRef = useRef(null);
   const readerCanvasRef = useRef(null);
+  const [reciter, setReciter] = useState(() => localStorage.getItem('mutabi_quran_reciter') || 'husary');
+  const reciterRef = useRef(reciter);
+  reciterRef.current = reciter;
+  const [savedBookmark, setSavedBookmark] = useState(() => getSavedBookmark());
+  const [previousAlert, setPreviousAlert] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+  const toastTimeoutRef = useRef(null);
 
-  // Single Ayah audio recitation
-  const singleAyahAudioRef = useRef(null);
+  const showToast = (message) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToastMessage(message);
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 3200);
+  };
+
+  // ------------------------------------------------------------------
+  // محرك الصوت: عنصر Audio واحد دائم يُعاد استخدامه لكل الأوضاع
+  // (تلاوة السورة / سماع آية واحدة / قراءة متواصلة). إعادة استخدام نفس
+  // العنصر هي اللي بتخلي الانتقال للآية التالية يشتغل في الموبايل من غير ما يفصل.
+  // قفل نافذة التفسير لا يلمس الصوت نهائياً.
+  // ------------------------------------------------------------------
+  const playerRef = useRef(null);
+  const audioTokenRef = useRef(0);
+  const audioModeRef = useRef(null); // 'surah' | 'ayah' | 'continuous' | null
+  const audioAyahRef = useRef(null);
+  const surahAudioKeyRef = useRef(null);
+  const preloadRef = useRef(null);
   const [singleAyahPlaying, setSingleAyahPlaying] = useState(false);
+  const [continuousAyahPlaying, setContinuousAyahPlaying] = useState(false);
+  // رقم الآية التي تُتلى الآن (للشريط العائم وأزرار التفسير)
+  const [playingAyahNumber, setPlayingAyahNumber] = useState(null);
 
   // Keep the text-based Mushaf view primary; the scanned page remains optional.
   const [viewMode, setViewMode] = useState('text');
@@ -146,6 +185,9 @@ export function QuranReaderModal({
     return localStorage.getItem('mutabi_quran_font') || 'hafs';
   });
   const [showFontMenu, setShowFontMenu] = useState(false);
+  const fontButtonRef = useRef(null);
+  const readerHeaderRef = useRef(null);
+  const [fontMenuPosition, setFontMenuPosition] = useState(null);
 
   // Immersive Zen Reading Mode (Toggles top and bottom toolbars upon tapping page canvas)
   const [showControls, setShowControls] = useState(true);
@@ -164,6 +206,74 @@ export function QuranReaderModal({
   const pendingPageNavigationRef = useRef(null);
   const hasMountedSurahRef = useRef(false);
   const readingPositionRestoredRef = useRef(false);
+  // أثناء استعادة الموضع بعد الريلود نتجاهل أحداث التمرير حتى لا يتغير الموضع المحفوظ
+  const ignoreScrollUntilRef = useRef(0);
+  // الموضع المنتظر حفظه في localStorage (نحفظ بتأخير بسيط بدل كل إطار)
+  const pendingPositionRef = useRef(null);
+  const positionTimerRef = useRef(0);
+
+  const getPlayer = () => {
+    if (!playerRef.current) {
+      const audio = new Audio();
+      audio.preload = 'auto';
+      playerRef.current = audio;
+    }
+    return playerRef.current;
+  };
+
+  // إيقاف أي صوت شغال وتصفير كل الحالات
+  const stopAudio = () => {
+    audioTokenRef.current += 1;
+    audioModeRef.current = null;
+    audioAyahRef.current = null;
+    surahAudioKeyRef.current = null;
+    detachAudio(playerRef.current);
+    preloadRef.current = null;
+    setAudioPlaying(false);
+    setSingleAyahPlaying(false);
+    setContinuousAyahPlaying(false);
+    setPlayingAyahNumber(null);
+  };
+
+  // عند إغلاق المصحف (إزالته من الشاشة) نوقف كل الصوت ولا نتركه يعمل في الخلفية
+  useEffect(() => {
+    return () => {
+      audioTokenRef.current += 1;
+      const audio = playerRef.current;
+      detachAudio(audio);
+      if (audio) {
+        try {
+          audio.removeAttribute('src');
+          audio.load();
+        } catch {
+          // ignore
+        }
+      }
+      playerRef.current = null;
+      preloadRef.current = null;
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
+
+  // نحفظ أن المصحف مفتوح، فلو عملت ريلود يتفتح تاني في نفس المكان
+  useEffect(() => {
+    if (!isOpen) return;
+    try {
+      localStorage.setItem(QURAN_OPEN_KEY, '1');
+    } catch {
+      // ignore
+    }
+  }, [isOpen]);
+
+  // الإغلاق اليدوي فقط (زر X أو Esc) هو اللي يمسح حالة "مفتوح"
+  const handleClose = () => {
+    try {
+      localStorage.removeItem(QURAN_OPEN_KEY);
+    } catch {
+      // ignore
+    }
+    onClose?.();
+  };
 
   // Debounced search via Quran Foundation API
   useEffect(() => {
@@ -197,13 +307,14 @@ export function QuranReaderModal({
     }
   }, [showSearch]);
 
-  // Auto-scroll to highlighted verse if navigating from search
+  // Auto-scroll to the verse if navigating from search (بدون أي تلوين)
   useEffect(() => {
     if (!highlightedAyahNumber || !surahData?.ayahs) return;
     const timer = setTimeout(() => {
       const el = document.getElementById(`ayah-${highlightedAyahNumber}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedAyahNumber(null);
       }
     }, 150);
     return () => clearTimeout(timer);
@@ -213,6 +324,7 @@ export function QuranReaderModal({
     readingPositionRestoredRef.current = false;
   }, [isOpen, selectedSurah]);
 
+  // متابعة موضع القراءة أثناء التمرير وحفظه (الآية + مكانها بالبكسل داخل الشاشة)
   useEffect(() => {
     if (
       !isOpen ||
@@ -224,14 +336,30 @@ export function QuranReaderModal({
     const main = readerCanvasRef.current;
     if (!main) return;
 
+    const flushPosition = () => {
+      window.clearTimeout(positionTimerRef.current);
+      positionTimerRef.current = 0;
+      const pending = pendingPositionRef.current;
+      if (!pending) return;
+      pendingPositionRef.current = null;
+      try {
+        localStorage.setItem('mutabi_quran_position', JSON.stringify(pending));
+      } catch (error) {
+        console.warn('Could not save the Quran reading position:', error);
+      }
+    };
+
     const updateReadingPosition = () => {
       if (!readingPositionRestoredRef.current) return;
-      const markerY = main.getBoundingClientRect().top + Math.min(140, main.clientHeight * 0.2);
+      // لا نحدّث الموضع المحفوظ أثناء استعادته (تفادياً لانزلاق الموضع للخلف)
+      if (Date.now() < ignoreScrollUntilRef.current) return;
+      const mainRect = main.getBoundingClientRect();
+      const markerY = mainRect.top + Math.min(140, main.clientHeight * 0.2);
       const ayahElements = [...main.querySelectorAll('[data-verse-key]')];
       const activeElement =
         ayahElements.find((element) => {
           const rect = element.getBoundingClientRect();
-          return rect.bottom >= markerY && rect.top < main.getBoundingClientRect().bottom;
+          return rect.bottom >= markerY && rect.top < mainRect.bottom;
         }) || ayahElements[0];
       if (!activeElement) return;
 
@@ -241,6 +369,7 @@ export function QuranReaderModal({
         surahNumber: selectedSurah,
         ayahNumber,
         pageNumber,
+        offset: Math.round(activeElement.getBoundingClientRect().top - mainRect.top),
       };
       const division = getQuranDivisionByAyah({
         pageNumber,
@@ -251,19 +380,15 @@ export function QuranReaderModal({
 
       if (Number.isInteger(pageNumber) && pageNumber >= 1 && pageNumber <= TOTAL_PAGES) {
         setCurrentPage((previous) => (previous === pageNumber ? previous : pageNumber));
-        setCurrentDivision(division);
-        const previous = savedPositionRef.current;
-        if (
-          previous?.surahNumber !== position.surahNumber ||
-          previous?.ayahNumber !== position.ayahNumber ||
-          previous?.pageNumber !== position.pageNumber
-        ) {
-          try {
-            localStorage.setItem('mutabi_quran_position', JSON.stringify(position));
-            savedPositionRef.current = position;
-          } catch (error) {
-            console.warn('Could not save the Quran reading position:', error);
-          }
+        setCurrentDivision((previous) =>
+          previous?.rubTotal === division?.rubTotal && previous?.page === division?.page
+            ? previous
+            : division,
+        );
+        savedPositionRef.current = position;
+        pendingPositionRef.current = position;
+        if (!positionTimerRef.current) {
+          positionTimerRef.current = window.setTimeout(flushPosition, 250);
         }
       }
     };
@@ -276,22 +401,32 @@ export function QuranReaderModal({
         updateReadingPosition();
       });
     };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') flushPosition();
+    };
 
     main.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('pagehide', flushPosition);
+    document.addEventListener('visibilitychange', handleVisibility);
     return () => {
       main.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('pagehide', flushPosition);
+      document.removeEventListener('visibilitychange', handleVisibility);
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
+      flushPosition();
     };
   }, [isOpen, selectedSurah, surahData, viewMode]);
 
+  // استعادة الموضع بعد تحميل السورة (الريلود يرجّعك لنفس الآية ونفس مكانها في الشاشة)
   useEffect(() => {
     if (
       !isOpen ||
       surahData?.number !== selectedSurah ||
       !surahData?.ayahs?.length ||
       viewMode !== 'text'
-    ) return;
+    ) return undefined;
 
+    const main = readerCanvasRef.current;
     const saved = savedPositionRef.current;
     const targetPage = pendingPageNavigationRef.current;
     if (targetPage) {
@@ -300,42 +435,106 @@ export function QuranReaderModal({
         readingPositionRestoredRef.current = true;
         pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
         pendingPageNavigationRef.current = null;
-        return;
+        return undefined;
       }
     }
 
     readingPositionRestoredRef.current = true;
-    if (saved?.surahNumber === selectedSurah) {
-      const savedAyah = document.getElementById(`ayah-${saved.ayahNumber}`);
-      if (savedAyah) {
-        const pageNumber = Number(savedAyah.dataset.pageNumber);
-        setCurrentPage(pageNumber);
-        setCurrentDivision(getQuranDivisionByAyah({
-          pageNumber,
-          juzNumber: Number(savedAyah.dataset.juzNumber),
-          hizbNumber: Number(savedAyah.dataset.hizbNumber),
-          rubElHizbNumber: Number(savedAyah.dataset.rubElHizbNumber),
-        }));
-        savedAyah.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
+    if (main && saved?.surahNumber === selectedSurah) {
+      let lastAppliedTop = null;
+
+      // نحط الآية المحفوظة في نفس المكان بالظبط اللي كانت فيه على الشاشة
+      const applySaved = () => {
+        const savedAyah = document.getElementById(`ayah-${saved.ayahNumber}`);
+        if (!savedAyah) return false;
+        const desiredOffset = Number.isFinite(saved.offset)
+          ? saved.offset
+          : Math.min(140, main.clientHeight * 0.2);
+        const delta =
+          savedAyah.getBoundingClientRect().top -
+          main.getBoundingClientRect().top -
+          desiredOffset;
+        ignoreScrollUntilRef.current = Date.now() + 800;
+        main.scrollTop += delta;
+        lastAppliedTop = main.scrollTop;
+        return true;
+      };
+
+      if (applySaved()) {
+        const savedAyah = document.getElementById(`ayah-${saved.ayahNumber}`);
+        const pageNumber = Number(savedAyah?.dataset.pageNumber);
+        if (Number.isInteger(pageNumber)) {
+          setCurrentPage(pageNumber);
+          setCurrentDivision(getQuranDivisionByAyah({
+            pageNumber,
+            juzNumber: Number(savedAyah.dataset.juzNumber),
+            hizbNumber: Number(savedAyah.dataset.hizbNumber),
+            rubElHizbNumber: Number(savedAyah.dataset.rubElHizbNumber),
+          }));
+        }
+
+        // الخطوط بتتحمل متأخر وبتغيّر الارتفاعات، فنعيد الضبط مرة واحدة لو المستخدم ما تحركش
+        let cancelled = false;
+        const reapply = () => {
+          if (cancelled) return;
+          if (lastAppliedTop != null && Math.abs(main.scrollTop - lastAppliedTop) > 4) return;
+          applySaved();
+        };
+        const timer = window.setTimeout(reapply, 450);
+        if (document.fonts?.ready) document.fonts.ready.then(reapply).catch(() => {});
+        return () => {
+          cancelled = true;
+          window.clearTimeout(timer);
+        };
       }
+
       const savedPage = document.getElementById(`quran-page-${saved.pageNumber}`);
       if (savedPage) {
-        savedPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        return;
+        ignoreScrollUntilRef.current = Date.now() + 700;
+        savedPage.scrollIntoView({ behavior: 'auto', block: 'start' });
+        return undefined;
       }
     }
     readerCanvasRef.current?.dispatchEvent(new Event('scroll'));
-  }, [isOpen, selectedSurah, surahData, viewMode, currentPage]);
+    return undefined;
+  }, [isOpen, selectedSurah, surahData, viewMode]);
 
-  // Sync initial Surah
+  // Sync initial Surah and check for previous reading position / bookmark
   useEffect(() => {
+    if (!isOpen) {
+      setPreviousAlert(null);
+      return;
+    }
+    const bookmark = getSavedBookmark();
+    const lastPos = getSavedReadingPosition();
+    setSavedBookmark(bookmark);
+
     if (initialSurahNumber && initialSurahNumber >= 1 && initialSurahNumber <= 114) {
-      const saved = getSavedReadingPosition();
-      const shouldRestore = initialSurahNumber === 1 && saved;
-      const nextSurah = shouldRestore ? saved.surahNumber : initialSurahNumber;
+      // آخر موضع قراءة له الأولوية على العلامة المرجعية عند الفتح/الريلود
+      const target = lastPos || bookmark;
+      const shouldRestore = initialSurahNumber === 1 && target;
+      const nextSurah = shouldRestore ? target.surahNumber : initialSurahNumber;
       setSelectedSurah(nextSurah);
-      setCurrentPage(shouldRestore ? saved.pageNumber : SURAHS[nextSurah - 1].startPage);
+      setCurrentPage(shouldRestore ? target.pageNumber : SURAHS[nextSurah - 1].startPage);
+    }
+
+    // التنبيه يظهر للعلامة المرجعية فقط، وإن كانت تختلف عن مكان القراءة الحالي
+    if (
+      bookmark &&
+      (!lastPos ||
+        bookmark.pageNumber !== lastPos.pageNumber ||
+        bookmark.surahNumber !== lastPos.surahNumber)
+    ) {
+      const sMeta = SURAHS.find((s) => s.number === bookmark.surahNumber) || SURAHS[0];
+      setPreviousAlert({
+        surahNumber: bookmark.surahNumber,
+        surahName: sMeta.name,
+        pageNumber: bookmark.pageNumber,
+        ayahNumber: bookmark.ayahNumber || 1,
+        isBookmark: true,
+      });
+    } else {
+      setPreviousAlert(null);
     }
   }, [initialSurahNumber, isOpen]);
 
@@ -367,17 +566,52 @@ export function QuranReaderModal({
     } catch {}
   }, [selectedFontId]);
 
+  useEffect(() => {
+    if (!showFontMenu) {
+      setFontMenuPosition(null);
+      return undefined;
+    }
+
+    const updateFontMenuPosition = () => {
+      const button = fontButtonRef.current;
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const headerBottom = readerHeaderRef.current?.getBoundingClientRect().bottom || rect.bottom;
+      const menuWidth = Math.min(320, Math.max(260, window.innerWidth - 16));
+      const left = Math.min(
+        Math.max(8, rect.left),
+        Math.max(8, window.innerWidth - menuWidth - 8),
+      );
+      // The menu is deliberately placed after the whole header, not inside its scrollable row.
+      const below = Math.max(rect.bottom + 12, headerBottom + 12);
+      setFontMenuPosition({
+        top: below,
+        left,
+        width: menuWidth,
+      });
+    };
+
+    updateFontMenuPosition();
+    window.addEventListener('resize', updateFontMenuPosition);
+    window.addEventListener('scroll', updateFontMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateFontMenuPosition);
+      window.removeEventListener('scroll', updateFontMenuPosition, true);
+    };
+  }, [showFontMenu]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mutabi_quran_reciter', reciter);
+    } catch (error) {
+      console.warn('Could not save the Quran reciter preference:', error);
+    }
+  }, [reciter]);
+
   // Load the Quran text and tafseer independently so a tafseer outage cannot block reading.
   useEffect(() => {
     if (!isOpen) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        setAudioPlaying(false);
-      }
-      if (singleAyahAudioRef.current) {
-        singleAyahAudioRef.current.pause();
-        setSingleAyahPlaying(false);
-      }
+      stopAudio();
       setSelectedAyahForTafseer(null);
       return;
     }
@@ -391,14 +625,8 @@ export function QuranReaderModal({
       setTafseerLoading(true);
       setTafseerError(null);
       setSelectedAyahForTafseer(null);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        setAudioPlaying(false);
-      }
-      if (singleAyahAudioRef.current) {
-        singleAyahAudioRef.current.pause();
-        setSingleAyahPlaying(false);
-      }
+      // تغيير السورة (أو إعادة التحميل) هو الحالة الوحيدة اللي بتوقف الصوت هنا
+      stopAudio();
       const [versesResult, tafseerResult] = await Promise.allSettled([
         getSurahAyahs(selectedSurah),
         getSurahTafseer(selectedSurah),
@@ -476,7 +704,7 @@ export function QuranReaderModal({
         } else if (selectedAyahForTafseer) {
           setSelectedAyahForTafseer(null);
         } else {
-          onClose();
+          handleClose();
         }
       }
     };
@@ -542,32 +770,117 @@ export function QuranReaderModal({
     }
   };
 
+  // Handle setting/toggling bookmark
+  const handleToggleBookmark = (targetAyah = null) => {
+    const targetPage = targetAyah ? targetAyah.pageNumber : currentPage;
+    const targetSurahNum = targetAyah
+      ? (surahData?.number || selectedSurah)
+      : (viewMode === 'page' ? getSurahForPage(currentPage).number : selectedSurah);
+    const surahMeta = SURAHS.find((s) => s.number === targetSurahNum) || currentMeta;
+    const targetAyahNum = targetAyah
+      ? targetAyah.number
+      : (surahData?.ayahs?.find((a) => a.pageNumber === targetPage)?.number || 1);
+
+    const isCurrentBookmarked = savedBookmark?.pageNumber === targetPage && savedBookmark?.surahNumber === targetSurahNum;
+
+    if (isCurrentBookmarked && !targetAyah) {
+      showToast(`العلامة المرجعية محفوظة بالفعل عند سورة ${surahMeta.name} (صفحة ${targetPage})`);
+      return;
+    }
+
+    const newBookmark = {
+      surahNumber: targetSurahNum,
+      surahName: surahMeta.name,
+      pageNumber: targetPage,
+      ayahNumber: targetAyahNum,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      localStorage.setItem('mutabi_quran_bookmark', JSON.stringify(newBookmark));
+      setSavedBookmark(newBookmark);
+      showToast(`تم حفظ العلامة المرجعية عند سورة ${surahMeta.name} (صفحة ${targetPage} • الآية ${targetAyahNum})`);
+    } catch (err) {
+      console.warn('Could not save bookmark:', err);
+    }
+  };
+
+  const handleJumpToBookmark = () => {
+    if (!savedBookmark) return;
+    pendingPageNavigationRef.current = savedBookmark.pageNumber;
+    if (savedBookmark.surahNumber !== selectedSurah) {
+      setSelectedSurah(savedBookmark.surahNumber);
+    }
+    setCurrentPage(savedBookmark.pageNumber);
+    setPreviousAlert(null);
+    showToast(`تم الانتقال إلى العلامة المرجعية: سورة ${savedBookmark.surahName} (صفحة ${savedBookmark.pageNumber})`);
+
+    setTimeout(() => {
+      const pageEl = document.getElementById(`quran-page-${savedBookmark.pageNumber}`);
+      pageEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (savedBookmark.ayahNumber) {
+        const ayahEl = document.getElementById(`ayah-${savedBookmark.ayahNumber}`);
+        ayahEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 200);
+  };
+
+  // إيقاف التلاوة المتواصلة / سماع الآية (يستخدمه الشريط العائم)
+  const stopContinuousAudio = () => {
+    stopAudio();
+  };
+
+  // قفل نافذة التفسير لا يوقف الصوت أبداً؛ فقط يخفي النافذة
+  const closeTafseer = () => {
+    setSelectedAyahForTafseer(null);
+  };
+
+  const getCurrentReciter = () =>
+    RECITERS.find((r) => r.id === reciterRef.current) || RECITERS[0];
+
   // Toggle full surah audio
   const toggleAudio = () => {
     const surahNumber = currentMeta.number;
-    if (singleAyahAudioRef.current) {
-      singleAyahAudioRef.current.pause();
-      setSingleAyahPlaying(false);
-    }
+    const currentReciter = getCurrentReciter();
+    const audioKey = `${currentReciter.id}:${surahNumber}`;
+    const audio = getPlayer();
 
-    if (!audioRef.current) {
-      const audioUrl = `https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/${surahNumber}.mp3`;
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      audio.onplay = () => setAudioPlaying(true);
-      audio.onpause = () => setAudioPlaying(false);
-      audio.onended = () => setAudioPlaying(false);
-      audio.onerror = () => setAudioPlaying(false);
-
-      audio.play().catch(() => setAudioPlaying(false));
-    } else {
-      if (audioPlaying) {
-        audioRef.current.pause();
+    // نفس السورة بنفس القارئ شغالة بالفعل: تشغيل/إيقاف مؤقت
+    if (audioModeRef.current === 'surah' && surahAudioKeyRef.current === audioKey) {
+      if (audio.paused) {
+        audio.play().catch(() => setAudioPlaying(false));
       } else {
-        audioRef.current.play().catch(() => setAudioPlaying(false));
+        audio.pause();
       }
+      return;
     }
+
+    stopAudio();
+    const token = ++audioTokenRef.current;
+    audioModeRef.current = 'surah';
+    surahAudioKeyRef.current = audioKey;
+
+    audio.onplay = () => {
+      if (token === audioTokenRef.current) setAudioPlaying(true);
+    };
+    audio.onpause = () => {
+      if (token === audioTokenRef.current) setAudioPlaying(false);
+    };
+    audio.onended = () => {
+      if (token !== audioTokenRef.current) return;
+      stopAudio();
+    };
+    audio.onerror = () => {
+      if (token !== audioTokenRef.current) return;
+      stopAudio();
+      setLogError('تعذر تشغيل تلاوة السورة. تحقق من اتصال الإنترنت.');
+    };
+
+    audio.src = currentReciter.getSurahUrl(surahNumber);
+    audio.play().catch((error) => {
+      if (token !== audioTokenRef.current || error?.name === 'AbortError') return;
+      setAudioPlaying(false);
+    });
   };
 
   // Calculate global Ayah index in Quran (1..6236) for single verse audio
@@ -576,33 +889,110 @@ export function QuranReaderModal({
     return priorAyahs + ayahNumInSurah;
   };
 
-  // Play / Pause single Ayah audio
+  // "سماع الآية": تشغيل هذه الآية وحدها ثم التوقف (من غير ما يكمل لما بعدها)
   const toggleSingleAyahAudio = (ayahNumInSurah) => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      setAudioPlaying(false);
+    setLogError(null);
+
+    // ضغطة تانية على نفس الآية وهي شغالة = إيقاف
+    if (audioModeRef.current === 'ayah' && audioAyahRef.current === ayahNumInSurah) {
+      stopAudio();
+      return;
     }
 
+    stopAudio();
+    const token = ++audioTokenRef.current;
+    audioModeRef.current = 'ayah';
+    audioAyahRef.current = ayahNumInSurah;
+
+    const audio = getPlayer();
     const globalNum = getGlobalAyahNumber(selectedSurah, ayahNumInSurah);
-    const audioUrl = `https://cdn.islamic.network/quran/audio/128/ar.alafasy/${globalNum}.mp3`;
 
-    if (singleAyahAudioRef.current) {
-      singleAyahAudioRef.current.pause();
-      if (singleAyahPlaying) {
-        setSingleAyahPlaying(false);
-        return;
+    audio.onended = () => {
+      if (token !== audioTokenRef.current) return;
+      stopAudio();
+    };
+    audio.onerror = () => {
+      if (token !== audioTokenRef.current) return;
+      stopAudio();
+      setLogError('تعذر تشغيل الآية. تحقق من اتصال الإنترنت ثم أعد المحاولة.');
+    };
+
+    audio.src = getCurrentReciter().getAyahUrl(globalNum);
+    setSingleAyahPlaying(true);
+    setPlayingAyahNumber(ayahNumInSurah);
+    audio.play().catch((error) => {
+      if (token !== audioTokenRef.current || error?.name === 'AbortError') return;
+      console.warn('Could not play the ayah recitation:', error);
+      stopAudio();
+      setLogError('تعذر تشغيل الآية. تحقق من اتصال الإنترنت ثم أعد المحاولة.');
+    });
+  };
+
+  // "ابدأ قراءة من هنا": تلاوة متواصلة من هذه الآية حتى نهاية السورة (بدون أي تلوين للآية)
+  const startSurahFromAyah = (ayahNumInSurah) => {
+    setLogError(null);
+    stopAudio();
+
+    const token = ++audioTokenRef.current;
+    audioModeRef.current = 'continuous';
+    const surahNumber = selectedSurah;
+    const lastAyah = selectedSurahMeta.ayahsCount;
+    const audio = getPlayer();
+
+    setContinuousAyahPlaying(true);
+    setPlayingAyahNumber(ayahNumInSurah);
+
+    const failPlayback = () => {
+      if (token !== audioTokenRef.current) return;
+      stopAudio();
+      setLogError('تعذر تشغيل التلاوة. تحقق من اتصال الإنترنت ثم أعد المحاولة.');
+    };
+
+    const playAyah = (ayahNumber) => {
+      if (token !== audioTokenRef.current) return;
+      audioAyahRef.current = ayahNumber;
+      setPlayingAyahNumber(ayahNumber);
+      document.getElementById(`ayah-${ayahNumber}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+
+      const reciterNow = getCurrentReciter();
+      audio.onended = () => {
+        if (token !== audioTokenRef.current) return;
+        if (ayahNumber < lastAyah) {
+          playAyah(ayahNumber + 1);
+        } else {
+          stopAudio();
+        }
+      };
+      audio.onerror = failPlayback;
+      audio.src = reciterNow.getAyahUrl(getGlobalAyahNumber(surahNumber, ayahNumber));
+      audio.play().catch((error) => {
+        if (token !== audioTokenRef.current || error?.name === 'AbortError') return;
+        console.warn('Could not play Quran recitation:', error);
+        failPlayback();
+      });
+
+      // تحميل مسبق للآية التالية عشان ما يبقاش فيه فجوة بين الآيات
+      if (ayahNumber < lastAyah) {
+        try {
+          const preload = new Audio();
+          preload.preload = 'auto';
+          preload.src = reciterNow.getAyahUrl(getGlobalAyahNumber(surahNumber, ayahNumber + 1));
+          preloadRef.current = preload;
+        } catch {
+          // ignore
+        }
       }
+    };
+
+    const ayah = surahData?.ayahs?.find((item) => item.number === ayahNumInSurah);
+    if (ayah) {
+      setCurrentPage(ayah.pageNumber);
+      setCurrentDivision(getQuranDivisionByAyah(ayah));
     }
-
-    const audio = new Audio(audioUrl);
-    singleAyahAudioRef.current = audio;
-
-    audio.onplay = () => setSingleAyahPlaying(true);
-    audio.onpause = () => setSingleAyahPlaying(false);
-    audio.onended = () => setSingleAyahPlaying(false);
-    audio.onerror = () => setSingleAyahPlaying(false);
-
-    audio.play().catch(() => setSingleAyahPlaying(false));
+    playAyah(ayahNumInSurah);
   };
 
   // Open Tafseer sheet for specific Ayah
@@ -620,10 +1010,8 @@ export function QuranReaderModal({
 
     const nextIndex = currentIndex + direction;
     if (nextIndex >= 0 && nextIndex < surahData.ayahs.length) {
-      if (singleAyahAudioRef.current) {
-        singleAyahAudioRef.current.pause();
-        setSingleAyahPlaying(false);
-      }
+      // التنقل بين الآيات لا يقطع القراءة المتواصلة؛ يوقف فقط "سماع الآية" الواحدة
+      if (audioModeRef.current === 'ayah') stopAudio();
       setSelectedAyahForTafseer(surahData.ayahs[nextIndex]);
       setCopiedTafseer(false);
     }
@@ -653,6 +1041,7 @@ export function QuranReaderModal({
       bannerBg: 'bg-[#f0e3d0] border-[#d8c3a5] text-[#2c2214]',
       verseTextColor: 'text-[#2c2214]',
       verseHover: 'hover:bg-[#f3e7d5]',
+      selectedAyah: 'bg-[#e7d7bb]/80 shadow-[inset_0_0_0_1px_#c7ab7e]',
       bismillahColor: 'text-[#6b4716]',
       ayahMarker: 'text-[#7c561f] border-[#d8c3a5] bg-[#ebdcc4]/80 hover:bg-[#7c561f] hover:text-white',
       activeBtn: 'bg-[#7c561f] text-white',
@@ -671,6 +1060,7 @@ export function QuranReaderModal({
       bannerBg: 'bg-[#101827] border-slate-800 text-[#f8fafc]',
       verseTextColor: 'text-[#f8fafc]',
       verseHover: 'hover:bg-slate-800/70',
+      selectedAyah: 'bg-amber-300/15 shadow-[inset_0_0_0_1px_rgba(252,211,77,0.6)]',
       bismillahColor: 'text-amber-300',
       ayahMarker: 'text-amber-300 border-amber-500/50 bg-amber-950/70 hover:bg-amber-400 hover:text-slate-950',
       activeBtn: 'bg-emerald-600 text-white',
@@ -689,6 +1079,7 @@ export function QuranReaderModal({
       bannerBg: 'bg-slate-100 border-slate-200 text-slate-900',
       verseTextColor: 'text-slate-900',
       verseHover: 'hover:bg-slate-100/80',
+      selectedAyah: 'bg-emerald-100 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.55)]',
       bismillahColor: 'text-emerald-800',
       ayahMarker: 'text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-600 hover:text-white',
       activeBtn: 'bg-emerald-600 text-white',
@@ -713,6 +1104,13 @@ export function QuranReaderModal({
 
   const paddedPage = String(currentPage).padStart(3, '0');
   const pageImageUrl = `https://files.quran.app/hafs/madani/width_1024/page${paddedPage}.png`;
+
+  // حالة أزرار الصوت داخل نافذة الآية
+  const sheetAyahNumber = selectedAyahForTafseer?.number;
+  const singleHere = singleAyahPlaying && playingAyahNumber === sheetAyahNumber;
+  const continuousHere = continuousAyahPlaying && playingAyahNumber === sheetAyahNumber;
+  const accentText = lightingTheme === 'night' ? 'text-emerald-300' : 'text-emerald-700';
+
   return (
     <div
       className={`fixed inset-0 z-50 flex flex-col overflow-hidden transition-colors duration-200 ${themes.screenBg} animate-in fade-in select-none`}
@@ -726,247 +1124,397 @@ export function QuranReaderModal({
     >
       {/* Sleek, Distraction-Free Header Bar - Slides smoothly on tap */}
       <header
-        className={`fixed top-0 inset-x-0 px-2.5 sm:px-8 py-2 sm:py-3 border-b flex items-center justify-between gap-1.5 sm:gap-3 shrink-0 backdrop-blur-md z-30 transition-transform duration-300 ease-in-out ${
+        ref={readerHeaderRef}
+        className={`fixed top-0 inset-x-0 border-b flex flex-col shrink-0 backdrop-blur-md z-30 transition-transform duration-300 ease-in-out ${
           showControls ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0 pointer-events-none'
         } ${themes.headerBg}`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Right: Surah info & quick switcher */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-            <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
+        {/* Row 1: Surah selection, Page indicator, Bookmark, Search, Close */}
+        <div className="px-3 sm:px-8 py-2 sm:py-2.5 flex items-center justify-between gap-2 border-b border-current/10">
+          {/* Right: Surah info & quick switcher */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <BookOpen className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <select
+                  value={selectedSurah}
+                  onChange={(e) => {
+                    const surahNumber = Number(e.target.value);
+                    pendingPageNavigationRef.current = null;
+                    setSelectedAyahForTafseer(null);
+                    if (viewMode === 'page') {
+                      handlePageChange(SURAHS[surahNumber - 1]?.startPage);
+                    } else {
+                      setSelectedSurah(surahNumber);
+                    }
+                  }}
+                  className="font-black text-xs sm:text-base md:text-lg bg-transparent border-none focus:outline-none cursor-pointer max-w-[150px] sm:max-w-xs truncate"
+                  title="اضغط لتغيير السورة"
+                >
+                  {SURAHS.map((s) => (
+                    <option key={s.number} value={s.number} className="text-slate-900 bg-white">
+                      {s.number}. سورة {s.name} ({s.type === 'meccan' ? 'مكية' : 'مدنية'})
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 border border-emerald-500/20">
+                  صـ {currentPage}
+                </span>
+              </div>
+              <p className={`text-[10px] sm:text-xs ${themes.subText} hidden md:block truncate`}>
+                {currentMeta.type === 'meccan' ? 'مكية' : 'مدنية'} • {currentMeta.ayahsCount} آية
+                {currentDivision
+                  ? ` • الجزء ${currentDivision.juz} • الحزب ${currentDivision.hizb} • ${currentDivision.rubNameInHizb}`
+                  : ''}
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <select
-                value={selectedSurah}
-                onChange={(e) => {
-                  const surahNumber = Number(e.target.value);
-                  pendingPageNavigationRef.current = null;
-                  setSelectedAyahForTafseer(null);
-                  if (viewMode === 'page') {
-                    handlePageChange(SURAHS[surahNumber - 1]?.startPage);
-                  } else {
-                    setSelectedSurah(surahNumber);
-                  }
-                }}
-                className="font-black text-xs sm:text-base md:text-lg bg-transparent border-none focus:outline-none cursor-pointer max-w-[130px] sm:max-w-none truncate"
-                title="اضغط لتغيير السورة"
+
+          {/* Left: Bookmark, Search, Close */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Bookmark button */}
+            <button
+              type="button"
+              onClick={() => handleToggleBookmark()}
+              className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl sm:rounded-2xl text-xs font-bold flex items-center gap-1 transition-all border cursor-pointer ${
+                savedBookmark?.pageNumber === currentPage
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-xs ring-2 ring-amber-400/30'
+                  : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
+              }`}
+              title={
+                savedBookmark
+                  ? `العلامة المرجعية: سورة ${savedBookmark.surahName} (صفحة ${savedBookmark.pageNumber}) • اضغط لتثبيت العلامة عند هذه الصفحة`
+                  : 'حفظ علامة مرجعية عند هذه الصفحة'
+              }
+            >
+              <Bookmark
+                className={`w-4 h-4 ${
+                  savedBookmark?.pageNumber === currentPage ? 'fill-current text-slate-950' : 'text-amber-500'
+                }`}
+              />
+              <span className="hidden sm:inline font-bold">
+                {savedBookmark?.pageNumber === currentPage ? 'العلامة محددة' : 'حفظ موضع'}
+              </span>
+            </button>
+
+            {/* Jump to Bookmark button (if bookmark exists on another page) */}
+            {savedBookmark && savedBookmark.pageNumber !== currentPage && (
+              <button
+                type="button"
+                onClick={handleJumpToBookmark}
+                className="px-2 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition cursor-pointer flex items-center gap-1"
+                title={`الانتقال إلى العلامة المرجعية المحفوظة: سورة ${savedBookmark.surahName} صفحة ${savedBookmark.pageNumber}`}
               >
-                {SURAHS.map((s) => (
-                  <option key={s.number} value={s.number} className="text-slate-900 bg-white">
-                    {s.number}. سورة {s.name} ({s.type === 'meccan' ? 'مكية' : 'مدنية'})
+                <BookmarkCheck className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">صـ {savedBookmark.pageNumber}</span>
+              </button>
+            )}
+
+            {/* Search button */}
+            <button
+              type="button"
+              onClick={() => setShowSearch(true)}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl sm:rounded-2xl text-xs font-bold bg-black/5 dark:bg-white/5 border border-current/10 hover:bg-black/10 flex items-center gap-1 transition cursor-pointer"
+              title="البحث في السور والآيات (Ctrl+K أو /)"
+            >
+              <Search className="w-4 h-4 text-emerald-500" />
+              <span className="hidden sm:inline font-bold">بحث</span>
+            </button>
+
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={handleClose}
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl sm:rounded-2xl bg-black/10 hover:bg-rose-600 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-xs border border-current/10"
+              title="إغلاق المصحف والعودة"
+              aria-label="إغلاق المصحف"
+            >
+              <X className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Reading Tools Toolbar (Reciter, Audio, Font size, Font family, Sepia toggle, Themes) */}
+        <div className="px-3 sm:px-8 py-1.5 sm:py-2 flex items-center justify-between gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar bg-black/[0.02] dark:bg-white/[0.02]">
+          {/* Reciter selector + Full Surah Audio Button */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <label className="flex items-center gap-1">
+              <span className="sr-only">القارئ</span>
+              <select
+                value={reciter}
+                onChange={(event) => {
+                  const newRec = event.target.value;
+                  setReciter(newRec);
+                  // تلاوة السورة كاملة بتتوقف عند تغيير القارئ؛ القراءة المتواصلة تكمل بالقارئ الجديد من الآية التالية
+                  if (audioModeRef.current === 'surah') stopAudio();
+                }}
+                className="rounded-xl border border-current/10 bg-black/5 dark:bg-white/5 px-2 py-1 text-xs font-bold cursor-pointer hover:bg-black/10 focus:outline-none"
+                aria-label="اختيار قارئ القرآن"
+                title="اختيار القارئ المفضل"
+              >
+                {RECITERS.map((r) => (
+                  <option key={r.id} value={r.id} className="bg-white text-slate-900">
+                    {r.name}
                   </option>
                 ))}
               </select>
-            </div>
-            <p className={`text-[10px] sm:text-xs ${themes.subText} hidden md:block`}>
-              {currentMeta.type === 'meccan' ? 'مكية' : 'مدنية'} • {currentMeta.ayahsCount} آية • صفحة {currentPage}
-              {currentDivision
-                ? ` • الجزء ${currentDivision.juz} • الحزب ${currentDivision.hizb} • ${currentDivision.rubNameInHizb}`
-                : ' • يتم تحديد التقسيم من موضع الآية'}
-            </p>
-          </div>
-        </div>
+            </label>
 
-        {/* Center: Reading Comfort Tools (Sepia Quick Toggle, Uthmani Font Selector, Lighting & Zoom) */}
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* 1. Quick Sepia Switch Toggle (مفتاح تبديل سريع لنمط سيبيا) */}
-          <button
-            type="button"
-            onClick={toggleSepia}
-            className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl sm:rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
-              isSepiaActive
-                ? 'bg-[#7c561f] text-white border-[#7c561f] shadow-sm ring-2 ring-[#7c561f]/25'
-                : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
-            }`}
-            title={isSepiaActive ? 'إيقاف نمط سيبيا والعودة للوضع السابق' : 'تفعيل مفتاح نمط الورق الدافئ (Sepia) لراحة العين'}
-          >
-            <Eye className="w-3.5 h-3.5 shrink-0" />
-            <span className="font-bold hidden sm:inline">سيبيا</span>
-            {/* Elegant visual toggle switch pill */}
-            <span
-              className={`w-6 sm:w-7 h-3.5 sm:h-4 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
-                isSepiaActive ? 'bg-amber-300 justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'
-              }`}
-            >
-              <span className={`w-2.5 sm:w-3 h-2.5 sm:h-3 rounded-full transition-transform ${isSepiaActive ? 'bg-[#2c2214]' : 'bg-white'}`} />
-            </span>
-          </button>
-
-          {/* 2. Uthmani Font Family Selector (تغيير الخطوط إلى خطوط عثمانية واضحة) */}
-          <div className="relative">
+            {/* Full Surah Audio Play/Pause Button */}
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowFontMenu((prev) => !prev);
-              }}
-              className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl sm:rounded-2xl text-xs font-bold bg-black/5 dark:bg-white/5 border border-current/10 hover:bg-black/10 flex items-center gap-1 transition cursor-pointer"
-              title="اختيار نوع الخط العثماني لراحة القراءة"
+              onClick={toggleAudio}
+              className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-all border cursor-pointer ${
+                audioPlaying
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs animate-pulse'
+                  : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
+              }`}
+              title={`تلاوة صوتية للسورة كاملة بصوت ${RECITERS.find((r) => r.id === reciter)?.name || 'القارئ'}`}
             >
-              <Type className="w-3.5 h-3.5 text-emerald-500" />
-              <span className="hidden md:inline font-bold">{currentFont.shortName}</span>
-              <ChevronDown className="w-3 h-3 opacity-60 hidden sm:inline" />
+              {audioPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+              <span className="font-bold">{audioPlaying ? 'إيقاف' : 'تلاوة السورة'}</span>
             </button>
+          </div>
 
-            {/* Font Picker Popover */}
-            {showFontMenu && (
-              <div
-                className={`absolute left-0 mt-2 w-72 p-2 rounded-2xl border shadow-2xl z-50 animate-in fade-in slide-in-from-top-2 ${themes.drawerBg}`}
-                onClick={(e) => e.stopPropagation()}
+          {/* Center & Left Tools: Font Size, Font Style, Sepia Quick Toggle, Themes */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Font Sizer Controls (+ / -) */}
+            <div className="flex items-center gap-0.5 bg-black/5 dark:bg-white/5 p-0.5 rounded-xl border border-current/10">
+              <button
+                type="button"
+                onClick={() => setFontScale((s) => Math.max(1, s - 1))}
+                disabled={fontScale <= 1}
+                className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold hover:bg-black/10 disabled:opacity-30 cursor-pointer"
+                title="تصغير الخط"
               >
-                <div className="px-3 py-2 border-b border-current/10 mb-1">
-                  <p className="text-xs font-black">الخطوط العثمانية لراحة العين</p>
-                  <p className={`text-[10px] ${themes.subText}`}>اختر الخط الأنسب لراحتك البصرية أثناء التلاوة</p>
-                </div>
-                <div className="space-y-1">
-                  {UTHMANI_FONTS.map((font) => {
-                    const isSelected = font.id === selectedFontId;
-                    return (
-                      <button
-                        key={font.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedFontId(font.id);
-                          setShowFontMenu(false);
-                        }}
-                        className={`w-full text-right p-2.5 rounded-xl transition cursor-pointer flex items-start gap-2.5 ${
-                          isSelected
-                            ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                            : 'hover:bg-black/5 dark:hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="flex-1">
-                          <p className="text-xs font-bold">{font.name}</p>
-                          <p className={`text-[11px] mt-0.5 line-clamp-1 ${isSelected ? 'text-emerald-100' : themes.subText}`}>
-                            {font.description}
-                          </p>
-                          {/* Sample text preview */}
-                          <p className={`text-base mt-1 ${font.className} ${isSelected ? 'text-white' : themes.drawerHighlight}`}>
-                            بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
-                          </p>
-                        </div>
-                        {isSelected && <Check className="w-4 h-4 text-white shrink-0 mt-1" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+                <ZoomOut className="w-3 h-3" />
+              </button>
+              <span className="text-[10px] font-black px-1 opacity-80" title="حجم الخط">
+                {fontScale === 1 ? 'ص' : fontScale === 2 ? 'م' : fontScale === 3 ? 'ك' : fontScale === 4 ? 'ك+' : 'ك++'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setFontScale((s) => Math.min(5, s + 1))}
+                disabled={fontScale >= 5}
+                className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold hover:bg-black/10 disabled:opacity-30 cursor-pointer"
+                title="تكبير الخط"
+              >
+                <ZoomIn className="w-3 h-3" />
+              </button>
+            </div>
 
-          {/* 3. Theme Presets (ورق دافئ / ليلي / فاتح) */}
-          <div className="hidden lg:flex items-center gap-0.5 bg-black/5 dark:bg-white/5 p-1 rounded-2xl border border-current/10">
+            {/* Uthmani Font Family Selector */}
+            <div className="relative">
+              <button
+                type="button"
+                ref={fontButtonRef}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFontMenu((prev) => !prev);
+                }}
+                className="px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-bold bg-black/5 dark:bg-white/5 border border-current/10 hover:bg-black/10 flex items-center gap-1 transition cursor-pointer"
+                title="اختيار نوع الخط العثماني"
+                aria-label="اختيار نوع خط المصحف"
+                aria-expanded={showFontMenu}
+                aria-haspopup="menu"
+              >
+                <Type className="w-3.5 h-3.5 text-emerald-500" />
+                <span className="font-bold">{currentFont.shortName}</span>
+                <ChevronDown className="w-3 h-3 opacity-60" />
+              </button>
+
+              {/* Font Picker Popover */}
+              {showFontMenu && fontMenuPosition && createPortal(
+                <div
+                  className="fixed inset-0 z-[9999]"
+                  onClick={() => setShowFontMenu(false)}
+                >
+                  <div
+                    className={`absolute p-2 rounded-2xl border shadow-2xl animate-in fade-in slide-in-from-top-2 ${themes.drawerBg}`}
+                    style={fontMenuPosition}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="px-3 py-2 border-b border-current/10 mb-1">
+                      <p className="text-xs font-black">الخطوط العثمانية لراحة العين</p>
+                      <p className={`text-[10px] ${themes.subText}`}>اختر الخط الأنسب لراحتك البصرية أثناء التلاوة</p>
+                    </div>
+                    <div className="space-y-1">
+                      {UTHMANI_FONTS.map((font) => {
+                        const isSelected = font.id === selectedFontId;
+                        return (
+                          <button
+                            key={font.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedFontId(font.id);
+                              setShowFontMenu(false);
+                            }}
+                            className={`w-full text-right p-2.5 rounded-xl transition cursor-pointer flex items-start gap-2.5 ${
+                              isSelected
+                                ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                                : 'hover:bg-black/5 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            <div className="flex-1">
+                              <p className="text-xs font-bold">{font.name}</p>
+                              <p className={`text-[11px] mt-0.5 line-clamp-1 ${isSelected ? 'text-emerald-100' : themes.subText}`}>
+                                {font.description}
+                              </p>
+                              <p className={`text-base mt-1 ${font.className} ${isSelected ? 'text-white' : themes.drawerHighlight}`}>
+                                بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+                              </p>
+                            </div>
+                            {isSelected && <Check className="w-4 h-4 text-white shrink-0 mt-1" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>,
+                document.body,
+              )}
+            </div>
+
+            {/* Quick Sepia Switch Toggle */}
             <button
               type="button"
-              onClick={() => setLightingTheme('sepia')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                lightingTheme === 'sepia' ? themes.activeBtn : 'opacity-60 hover:opacity-100'
+              onClick={toggleSepia}
+              className={`px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+                isSepiaActive
+                  ? 'bg-[#7c561f] text-white border-[#7c561f] shadow-xs'
+                  : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
               }`}
-              title="ورق دافئ (سيبيا)"
+              title={isSepiaActive ? 'إيقاف نمط سيبيا والعودة للوضع السابق' : 'تفعيل مفتاح نمط الورق الدافئ (Sepia)'}
             >
-              <Eye className="w-3.5 h-3.5" />
-              <span>دافئ</span>
+              <Eye className="w-3.5 h-3.5 shrink-0" />
+              <span className="font-bold">سيبيا</span>
+              <span
+                className={`w-6 h-3.5 rounded-full p-0.5 transition-colors flex items-center shrink-0 ${
+                  isSepiaActive ? 'bg-amber-300 justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'
+                }`}
+              >
+                <span className={`w-2.5 h-2.5 rounded-full transition-transform ${isSepiaActive ? 'bg-[#2c2214]' : 'bg-white'}`} />
+              </span>
             </button>
-            <button
-              type="button"
-              onClick={() => setLightingTheme('night')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                lightingTheme === 'night' ? themes.activeBtn : 'opacity-60 hover:opacity-100'
-              }`}
-              title="ليلي مريح"
-            >
-              <Moon className="w-3.5 h-3.5" />
-              <span>ليلي</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setLightingTheme('clean')}
-              className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                lightingTheme === 'clean' ? themes.activeBtn : 'opacity-60 hover:opacity-100'
-              }`}
-              title="فاتح نقي"
-            >
-              <Sun className="w-3.5 h-3.5" />
-              <span>فاتح</span>
-            </button>
+
+            {/* Desktop Theme Presets (دافئ / ليلي / فاتح) */}
+            <div className="hidden lg:flex items-center gap-0.5 bg-black/5 dark:bg-white/5 p-0.5 rounded-xl border border-current/10">
+              <button
+                type="button"
+                onClick={() => setLightingTheme('sepia')}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  lightingTheme === 'sepia' ? themes.activeBtn : 'opacity-60 hover:opacity-100'
+                }`}
+                title="ورق دافئ (سيبيا)"
+              >
+                <Eye className="w-3 h-3" />
+                <span>دافئ</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLightingTheme('night')}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  lightingTheme === 'night' ? themes.activeBtn : 'opacity-60 hover:opacity-100'
+                }`}
+                title="ليلي مريح"
+              >
+                <Moon className="w-3 h-3" />
+                <span>ليلي</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setLightingTheme('clean')}
+                className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  lightingTheme === 'clean' ? themes.activeBtn : 'opacity-60 hover:opacity-100'
+                }`}
+                title="فاتح نقي"
+              >
+                <Sun className="w-3 h-3" />
+                <span>فاتح</span>
+              </button>
+            </div>
           </div>
-
-          {/* 4. Font Sizer Controls (+ / -) */}
-          <div className="flex items-center gap-0.5 bg-black/5 dark:bg-white/5 p-0.5 sm:p-1 rounded-xl sm:rounded-2xl border border-current/10">
-            <button
-              type="button"
-              onClick={() => setFontScale((s) => Math.max(1, s - 1))}
-              disabled={fontScale <= 1}
-              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center text-xs font-bold hover:bg-black/10 disabled:opacity-30 cursor-pointer"
-              title="تصغير الخط"
-            >
-              <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            </button>
-            <span className="text-[10px] sm:text-xs font-black px-1 opacity-80" title="حجم الخط">
-              {fontScale === 1 ? 'ص' : fontScale === 2 ? 'م' : fontScale === 3 ? 'ك' : fontScale === 4 ? 'ك+' : 'ك++'}
-            </span>
-            <button
-              type="button"
-              onClick={() => setFontScale((s) => Math.min(5, s + 1))}
-              disabled={fontScale >= 5}
-              className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center text-xs font-bold hover:bg-black/10 disabled:opacity-30 cursor-pointer"
-              title="تكبير الخط"
-            >
-              <ZoomIn className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-            </button>
-          </div>
-
-          {/* 5. Full Surah Audio Recitation Button */}
-          <button
-            type="button"
-            onClick={toggleAudio}
-            className={`p-1.5 sm:p-2 rounded-xl sm:rounded-2xl text-xs font-bold flex items-center gap-1 transition-all border cursor-pointer ${
-              audioPlaying
-                ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs animate-pulse'
-                : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
-            }`}
-            title="تلاوة صوتية للسورة كاملة بصوت الشيخ مشاري العفاسي"
-          >
-            {audioPlaying ? <Pause className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-            <span className="hidden xl:inline">{audioPlaying ? 'إيقاف' : 'تلاوة'}</span>
-          </button>
-        </div>
-
-        {/* Left: Search & Elegant Close Button */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowSearch(true)}
-            className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl text-xs font-bold bg-black/5 dark:bg-white/5 border border-current/10 hover:bg-black/10 flex items-center gap-1.5 transition cursor-pointer"
-            title="البحث في السور والآيات (Ctrl+K أو /)"
-          >
-            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
-            <span className="hidden sm:inline font-bold">بحث</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-black/10 hover:bg-rose-600 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow-xs border border-current/10"
-            title="إغلاق المصحف والعودة"
-            aria-label="إغلاق المصحف"
-          >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
         </div>
       </header>
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-28 sm:top-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-slate-900/90 text-white text-xs sm:text-sm font-bold shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-2 border border-white/10">
+          <BookmarkCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
 
       {/* Main Fullscreen Quran Canvas - Tapping anywhere toggles zen reading mode */}
       <main
         ref={readerCanvasRef}
         onClick={() => setShowControls((prev) => !prev)}
         className={`flex-1 min-h-0 overflow-y-auto px-4 sm:px-12 md:px-20 lg:px-32 transition-all duration-300 cursor-default ${
-          showControls ? 'pt-20 pb-24 sm:pt-22 sm:pb-24' : 'pt-8 pb-12'
+          showControls ? 'pt-28 pb-24 sm:pt-26 sm:pb-24' : 'pt-8 pb-12'
         }`}
       >
-        <div className="max-w-4xl mx-auto space-y-8">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Bookmark Alert Banner */}
+          {previousAlert && (
+            <div
+              className={`rounded-2xl border p-3 sm:p-4 shadow-sm flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-3 ${themes.bannerBg}`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Bookmark className="w-5 h-5 fill-amber-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-bold truncate">
+                    {previousAlert.isBookmark ? '📌 علامتك المرجعية المحفوظة:' : '📖 موضع قراءتك السابق:'}{' '}
+                    سورة {previousAlert.surahName} (صفحة {previousAlert.pageNumber}
+                    {previousAlert.ayahNumber ? ` • الآية ${previousAlert.ayahNumber}` : ''})
+                  </p>
+                  <p className={`text-[11px] ${themes.subText} truncate`}>
+                    اضغط للانتقال إلى علامتك المرجعية
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    pendingPageNavigationRef.current = previousAlert.pageNumber;
+                    if (previousAlert.surahNumber !== selectedSurah) {
+                      setSelectedSurah(previousAlert.surahNumber);
+                    }
+                    setCurrentPage(previousAlert.pageNumber);
+                    setPreviousAlert(null);
+                    showToast(`تم الانتقال إلى سورة ${previousAlert.surahName} (صفحة ${previousAlert.pageNumber})`);
+                    setTimeout(() => {
+                      const pageEl = document.getElementById(`quran-page-${previousAlert.pageNumber}`);
+                      pageEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      if (previousAlert.ayahNumber) {
+                        const ayahEl = document.getElementById(`ayah-${previousAlert.ayahNumber}`);
+                        ayahEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                    }, 200);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1"
+                  title="الانتقال إلى العلامة المرجعية"
+                >
+                  <span>انتقال</span>
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviousAlert(null)}
+                  className="w-7 h-7 rounded-lg hover:bg-black/10 dark:hover:bg-white/10 flex items-center justify-center text-xs opacity-60 hover:opacity-100 transition cursor-pointer"
+                  title="إغلاق التنبيه"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Subtle guidance tip when controls are shown */}
           {showControls && (
             <div className="text-center">
@@ -975,7 +1523,7 @@ export function QuranReaderModal({
                 <span>
                   {viewMode === 'page'
                     ? 'تنقل بين صفحات المصحف بالأسهم أو اختر رقم الصفحة • انقر لإخفاء الأشرطة'
-                    : 'انقر على أي آية لعرض تفسيرها الميسر • انقر في أي مكان بالشاشة لإخفاء الأشرطة والقراءة بصفاء'}
+                    : 'انقر على أي آية لعرض تفسيرها وسماعها أو بدء القراءة منها • انقر في أي مكان بالشاشة لإخفاء الأشرطة'}
                 </span>
               </span>
             </div>
@@ -1066,7 +1614,7 @@ export function QuranReaderModal({
                 {selectedSurah !== 1 && selectedSurah !== 9 && (
                   <div className="pt-2">
                     <p className={`text-2xl sm:text-3xl font-bold ${currentFont.className} ${themes.bismillahColor}`}>
-                      بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+                      بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
                     </p>
                   </div>
                 )}
@@ -1089,6 +1637,27 @@ export function QuranReaderModal({
                             الجزء {pageDivision.juz} • الحزب {pageDivision.hizb} • {pageDivision.rubNameInHizb}
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleBookmark(section.ayahs[0])}
+                          className={`px-2.5 py-1 rounded-full text-xs font-bold border transition flex items-center gap-1 cursor-pointer ${
+                            savedBookmark?.pageNumber === section.pageNumber
+                              ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-xs ring-2 ring-amber-400/30'
+                              : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
+                          }`}
+                          title="تعيين علامة مرجعية عند هذه الصفحة"
+                        >
+                          <Bookmark
+                            className={`w-3.5 h-3.5 ${
+                              savedBookmark?.pageNumber === section.pageNumber
+                                ? 'fill-current text-slate-950'
+                                : 'text-amber-500'
+                            }`}
+                          />
+                          <span>
+                            {savedBookmark?.pageNumber === section.pageNumber ? 'علامتك المرجعية هنا' : 'وضع علامة هنا'}
+                          </span>
+                        </button>
                       </div>
                       <div
                         className={`text-right font-normal tracking-normal ${currentFont.className} ${themes.verseTextColor} ${fontStyle} rounded-2xl px-3 py-2 leading-relaxed`}
@@ -1100,7 +1669,7 @@ export function QuranReaderModal({
                       >
                         {section.ayahs.map((ayah) => {
                           const isSelected = selectedAyahForTafseer?.number === ayah.number;
-                          const isHighlighted = highlightedAyahNumber === ayah.number;
+                          const isPlaying = playingAyahNumber === ayah.number;
                           return (
                             <span
                               key={ayah.number}
@@ -1112,22 +1681,14 @@ export function QuranReaderModal({
                               data-hizb-number={ayah.hizbNumber}
                               data-rub-el-hizb-number={ayah.rubElHizbNumber}
                               onClick={(e) => handleOpenTafseer(ayah, e)}
-                              className={`inline px-1 py-0.5 rounded-xl transition-all cursor-pointer ${
-                                isSelected
-                                  ? 'ring-2 ring-emerald-500 bg-emerald-500/10'
-                                  : isHighlighted
-                                  ? 'ring-2 ring-amber-400 bg-amber-400/25 shadow-sm'
-                                  : themes.verseHover
-                              }`}
+                              className={`inline box-decoration-clone px-1 py-0.5 rounded-xl transition-colors cursor-pointer ${
+                                isSelected ? themes.selectedAyah : themes.verseHover
+                              } ${SHOW_PLAYING_TINT && isPlaying ? 'text-emerald-600' : ''}`}
                               title={`انقر لعرض تفسير الآية ${ayah.number} وسماعها`}
                             >
                               <span>{ayah.text}</span>{' '}
                               <span
-                                className={`inline-flex items-center justify-center min-w-[32px] h-8 px-2 mx-1 rounded-full border text-xs font-sans font-black select-none align-middle transition-transform hover:scale-110 active:scale-95 ${
-                                  isHighlighted
-                                    ? 'bg-amber-400 text-slate-900 border-amber-500 font-black ring-2 ring-amber-300'
-                                    : themes.ayahMarker
-                                }`}
+                                className={`inline-flex items-center justify-center min-w-[32px] h-8 px-2 mx-1 rounded-full border text-xs font-sans font-black select-none align-middle transition-transform hover:scale-110 active:scale-95 ${themes.ayahMarker}`}
                                 title={`الآية ${ayah.number} • اضغط للتفسير`}
                               >
                                 {ayah.number}
@@ -1272,23 +1833,38 @@ export function QuranReaderModal({
       {logError && (
         <p
           role="alert"
-          className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-lg"
+          className="fixed bottom-20 left-1/2 z-[60] -translate-x-1/2 rounded-xl bg-red-700 px-4 py-2 text-xs font-bold text-white shadow-lg"
         >
           {logError}
         </p>
+      )}
+
+      {/* شريط التلاوة المتواصلة: يظهر حتى لو أُغلق التفسير، ويتيح إيقاف التلاوة */}
+      {continuousAyahPlaying && (
+        <div
+          className={`fixed bottom-20 sm:bottom-24 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl border px-4 py-2 shadow-xl backdrop-blur-md ${themes.headerBg}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Volume2 className="w-4 h-4 text-emerald-500 animate-pulse shrink-0" />
+          <span className="text-xs font-bold whitespace-nowrap">
+            قراءة متواصلة{playingAyahNumber ? ` • الآية ${playingAyahNumber}` : ''}
+          </span>
+          <button
+            type="button"
+            onClick={stopContinuousAudio}
+            className="flex items-center gap-1 rounded-xl bg-rose-600 hover:bg-rose-700 px-3 py-1 text-xs font-bold text-white cursor-pointer"
+          >
+            <Pause className="w-3.5 h-3.5" />
+            <span>إيقاف</span>
+          </button>
+        </div>
       )}
 
       {/* Tafseer Al-Muyassar Bottom Sheet Drawer (تفسير ميسر بدون تشتيت وراحة تامة للعين) */}
       {selectedAyahForTafseer && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-xs transition-opacity duration-300 p-0 sm:p-4 animate-in fade-in"
-          onClick={() => {
-            if (singleAyahAudioRef.current) {
-              singleAyahAudioRef.current.pause();
-              setSingleAyahPlaying(false);
-            }
-            setSelectedAyahForTafseer(null);
-          }}
+          onClick={closeTafseer}
         >
           <div
             className={`w-full max-w-2xl rounded-t-3xl sm:rounded-3xl border shadow-2xl overflow-hidden flex flex-col max-h-[88vh] transition-all animate-in slide-in-from-bottom duration-300 ${themes.drawerBg}`}
@@ -1310,21 +1886,29 @@ export function QuranReaderModal({
                 </div>
               </div>
 
-              {/* Action Buttons: Audio, Copy, Close */}
+              {/* Action Buttons: Bookmark, Copy, Close */}
               <div className="flex items-center gap-1.5">
-                {/* Single Ayah Audio Play */}
+                {/* Bookmark Ayah */}
                 <button
                   type="button"
-                  onClick={() => toggleSingleAyahAudio(selectedAyahForTafseer.number)}
+                  onClick={() => handleToggleBookmark(selectedAyahForTafseer)}
                   className={`p-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition cursor-pointer ${
-                    singleAyahPlaying
-                      ? 'bg-emerald-600 text-white border-emerald-500 animate-pulse'
+                    savedBookmark?.pageNumber === selectedAyahForTafseer.pageNumber &&
+                    savedBookmark?.ayahNumber === selectedAyahForTafseer.number
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
                       : 'bg-black/5 hover:bg-black/10 border-current/10'
                   }`}
-                  title="استماع لتلاوة هذه الآية فقط (بصوت الشيخ مشاري العفاسي)"
+                  title="حفظ علامة مرجعية عند هذه الآية"
                 >
-                  {singleAyahPlaying ? <Pause className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                  <span className="hidden sm:inline">{singleAyahPlaying ? 'إيقاف' : 'استماع'}</span>
+                  <Bookmark
+                    className={`w-4 h-4 ${
+                      savedBookmark?.pageNumber === selectedAyahForTafseer.pageNumber &&
+                      savedBookmark?.ayahNumber === selectedAyahForTafseer.number
+                        ? 'fill-current text-slate-950'
+                        : 'text-amber-500'
+                    }`}
+                  />
+                  <span className="hidden sm:inline">علامة</span>
                 </button>
 
                 {/* Copy Verse + Tafseer */}
@@ -1338,18 +1922,12 @@ export function QuranReaderModal({
                   <span className="hidden sm:inline">{copiedTafseer ? 'تم النسخ' : 'نسخ'}</span>
                 </button>
 
-                {/* Close Button */}
+                {/* Close Button: لا يوقف الصوت */}
                 <button
                   type="button"
-                  onClick={() => {
-                    if (singleAyahAudioRef.current) {
-                      singleAyahAudioRef.current.pause();
-                      setSingleAyahPlaying(false);
-                    }
-                    setSelectedAyahForTafseer(null);
-                  }}
+                  onClick={closeTafseer}
                   className="w-8 h-8 rounded-xl bg-black/5 hover:bg-rose-600 hover:text-white flex items-center justify-center transition cursor-pointer"
-                  title="إغلاق التفسير"
+                  title="إغلاق التفسير (الصوت يكمل)"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1369,6 +1947,63 @@ export function QuranReaderModal({
                 <span className={`inline-block text-xs font-semibold ${themes.subText}`}>
                   سورة {currentMeta.name} — الآية [{selectedAyahForTafseer.number}]
                 </span>
+              </div>
+
+              {/* زرارين الصوت: مختلفين بوضوح في الشكل والوظيفة */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* 1) سماع الآية: هذه الآية فقط ثم تتوقف */}
+                <button
+                  type="button"
+                  onClick={() => toggleSingleAyahAudio(selectedAyahForTafseer.number)}
+                  className={`rounded-2xl border-2 px-3.5 py-2.5 flex items-center gap-3 text-right transition cursor-pointer ${
+                    singleHere
+                      ? `border-emerald-500 bg-emerald-500/15 ${accentText}`
+                      : `border-emerald-500/50 hover:border-emerald-500 hover:bg-emerald-500/10 ${accentText}`
+                  }`}
+                  title={`سماع هذه الآية فقط ثم تتوقف، بصوت ${RECITERS.find((r) => r.id === reciter)?.name || 'القارئ'}`}
+                >
+                  <span className="w-9 h-9 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
+                    {singleHere ? <Pause className="w-4 h-4 animate-pulse" /> : <Volume2 className="w-4 h-4" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black">
+                      {singleHere ? 'إيقاف الآية' : 'سماع الآية'}
+                    </span>
+                    <span className="block text-[11px] font-semibold opacity-75">
+                      هذه الآية فقط ثم تتوقف
+                    </span>
+                  </span>
+                </button>
+
+                {/* 2) ابدأ قراءة من هنا: متواصلة حتى نهاية السورة */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (continuousHere) {
+                      stopAudio();
+                    } else {
+                      startSurahFromAyah(selectedAyahForTafseer.number);
+                    }
+                  }}
+                  className={`rounded-2xl border-2 px-3.5 py-2.5 flex items-center gap-3 text-right text-white shadow-sm transition cursor-pointer ${
+                    continuousHere
+                      ? 'bg-rose-600 border-rose-600 hover:bg-rose-700'
+                      : 'bg-emerald-600 border-emerald-600 hover:bg-emerald-700'
+                  }`}
+                  title={`قراءة متواصلة من هذه الآية حتى نهاية سورة ${currentMeta.name} بصوت ${RECITERS.find((r) => r.id === reciter)?.name || 'القارئ'}`}
+                >
+                  <span className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    {continuousHere ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black">
+                      {continuousHere ? 'إيقاف القراءة' : 'ابدأ قراءة من هنا'}
+                    </span>
+                    <span className="block text-[11px] font-semibold opacity-85">
+                      متواصلة حتى نهاية السورة
+                    </span>
+                  </span>
+                </button>
               </div>
 
               {/* Tafseer Al-Muyassar Text - Comfortable eye reading typography */}

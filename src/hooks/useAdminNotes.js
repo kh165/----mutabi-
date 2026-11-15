@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   collection,
   query,
@@ -123,6 +123,24 @@ export function useAdminNotes(conversationUid = null) {
     }
   };
 
+  const markReplyAsRead = useCallback(async (noteId) => {
+    if (!isAdmin || !conversationUid || !user?.uid) return;
+    const note = notes.find((item) => item.id === noteId);
+    if (
+      !note ||
+      note.toUid !== conversationUid ||
+      !note.reply ||
+      note.reply.isRead
+    ) return;
+
+    try {
+      await updateDoc(doc(db, 'notes', noteId), { 'reply.isRead': true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `notes/${noteId}.reply.isRead`);
+      throw err;
+    }
+  }, [conversationUid, isAdmin, notes, user?.uid]);
+
   const sendNote = async (toUid, text) => {
     if (!user) throw new Error('You must be signed in to send a note.');
     try {
@@ -164,5 +182,5 @@ export function useAdminNotes(conversationUid = null) {
     }
   };
 
-  return { notes, loading, error, markAsRead, sendNote, replyToNote };
+  return { notes, loading, error, markAsRead, markReplyAsRead, sendNote, replyToNote };
 }

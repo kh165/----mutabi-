@@ -10,6 +10,7 @@ import {
   isBookCached,
   getCollectionStats,
 } from '../lib/hadithService.js';
+import { useHadithProgress } from '../hooks/useHadithProgress.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
   BookOpen,
@@ -35,7 +36,11 @@ import {
 } from 'lucide-react';
 
 export function HadithPage() {
-  const { userDoc, updateUserDoc } = useAuth();
+  const { user, userDoc } = useAuth();
+  const { readMap: readHadithMap, bookmarkedMap, setHadithProgress } = useHadithProgress(
+    user?.uid,
+    userDoc?.hadithProgress
+  );
 
   // Selected collection: 'nawawi' | 'bukhari' | 'muslim'
   const [selectedCollection, setSelectedCollection] = useState(() => {
@@ -74,15 +79,6 @@ export function HadithPage() {
   // Expandable benefits for 40 Hadiths
   const [expandedBenefits, setExpandedBenefits] = useState({});
   const [copiedId, setCopiedId] = useState(null);
-
-  // User progress from userDoc (synced with Firebase)
-  const readHadithMap = useMemo(() => {
-    return userDoc?.hadithProgress?.read || {};
-  }, [userDoc]);
-
-  const bookmarkedMap = useMemo(() => {
-    return userDoc?.hadithProgress?.bookmarked || {};
-  }, [userDoc]);
 
   // Save selected collection preference
   const handleSelectCollection = (collId) => {
@@ -135,37 +131,19 @@ export function HadithPage() {
   // Toggle Read status with progress update
   const toggleRead = async (hadithId) => {
     const isCurrentRead = !!readHadithMap[hadithId];
-    const updatedRead = {
-      ...readHadithMap,
-      [hadithId]: !isCurrentRead,
-    };
-    if (updateUserDoc) {
-      await updateUserDoc({
-        hadithProgress: {
-          read: updatedRead,
-          bookmarked: bookmarkedMap,
-          updatedAt: new Date().toISOString(),
-        },
-      });
-    }
+    await setHadithProgress(selectedCollection, hadithId, {
+      read: !isCurrentRead,
+      bookmarked: !!bookmarkedMap[hadithId],
+    });
   };
 
   // Toggle Bookmark
   const toggleBookmark = async (hadithId) => {
     const isCurrentBookmarked = !!bookmarkedMap[hadithId];
-    const updatedBookmarked = {
-      ...bookmarkedMap,
-      [hadithId]: !isCurrentBookmarked,
-    };
-    if (updateUserDoc) {
-      await updateUserDoc({
-        hadithProgress: {
-          read: readHadithMap,
-          bookmarked: updatedBookmarked,
-          updatedAt: new Date().toISOString(),
-        },
-      });
-    }
+    await setHadithProgress(selectedCollection, hadithId, {
+      read: !!readHadithMap[hadithId],
+      bookmarked: !isCurrentBookmarked,
+    });
   };
 
   const toggleExpand = (hadithId) => {
@@ -348,8 +326,8 @@ export function HadithPage() {
               {selectedCollection === 'nawawi'
                 ? 'متن الأربعين النووية للإمام النووي رحمه الله • 42 حديثاً جامعاً لأصول الدين وقواعد الإسلام ومكارم الأخلاق، مضبوطة بالتشكيل مع الفوائد والبيان.'
                 : selectedCollection === 'bukhari'
-                ? 'الجامع المسند الصحيح المختصر من أمور رسول الله ﷺ وسننه وأيامه للإمام أبي عبد الله البخاري • 97 كتاباً كاملاً يضم 7,563 حديثاً مشكولة مع الأسانيد.'
-                : 'المسند الصحيح بنقل العدل عن العدل إلى رسول الله ﷺ للإمام مسلم بن الحجاج النيسابوري • 57 كتاباً شاملاً لمقدمة الإمام مسلم وكافة أبواب الفقه والسنن.'}
+                ? 'الجامع المسند الصحيح للإمام البخاري • يضم فهرس النصوص المستخدم 7,589 سجل رواية، مع ترقيم مطبوع يصل إلى 7,563؛ وعدّ الأحاديث يختلف بحسب إدخال المكرر والمعلّق.'
+                : 'المسند الصحيح للإمام مسلم • يضم فهرس النصوص المستخدم 7,563 سجل رواية، بينما يبلغ العدّ دون تكرار في إحصاء محمد فؤاد عبد الباقي 3,033 حديثاً.'}
             </p>
 
             {/* Quick KPI stats */}
@@ -358,7 +336,7 @@ export function HadithPage() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-300" />
                 <span>
                   أتممت قراءة: {currentCollectionStats.readCount} من{' '}
-                  {currentCollectionStats.totalHadiths.toLocaleString('ar-EG')} حديثاً
+                  {currentCollectionStats.totalHadiths.toLocaleString('ar-EG')} {selectedCollection === 'nawawi' ? 'حديثاً' : 'سجلاً في الفهرس'}
                 </span>
               </div>
               <div className="px-3.5 py-1.5 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-md flex items-center gap-2 text-xs font-bold">
@@ -408,7 +386,7 @@ export function HadithPage() {
                   {coll.badge}
                 </span>
                 <span className="text-xs font-bold text-slate-400">
-                  {coll.totalHadiths.toLocaleString('ar-EG')} حديثاً
+                  {coll.totalHadiths.toLocaleString('ar-EG')} {coll.id === 'nawawi' ? 'حديثاً' : 'سجلاً'}
                 </span>
               </div>
               <h2 className="font-black text-base text-slate-900 dark:text-white mb-1">
@@ -422,6 +400,12 @@ export function HadithPage() {
         })}
       </div>
 
+      {selectedCollection !== 'nawawi' && (
+        <aside className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm leading-7 text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+          الأعداد في بطاقات الفهرس هي سجلات نسخة البيانات المستخدمة، وتشمل التكرار واختلاف طرق الرواية؛ وليست عدد الأحاديث المتفردة. وللمقارنة المنهجية: يذكر مقال وزارة الأوقاف المصرية 2,602 حديثًا مسندًا في البخاري دون تكرار، و3,033 حديثًا في مسلم دون تكرار بحسب إحصاء محمد فؤاد عبد الباقي.{' '}
+          <a href="https://awkafonline.gov.eg/content-sections/112/6798/%D8%A7%D9%84%D8%B5%D8%AD%D9%8A%D8%AD%D8%A7%D9%86" target="_blank" rel="noopener noreferrer" className="font-bold underline underline-offset-2">مصدر التفصيل</a>
+        </aside>
+      )}
       {/* VIEW A: Bukhari & Muslim Books Directory (when no book is open) */}
       {selectedCollection !== 'nawawi' && selectedBookId === null && (
         <div className="space-y-4">
@@ -797,7 +781,7 @@ export function HadithPage() {
                                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
                                   : 'bg-black/5 dark:bg-white/5 border-current/10 hover:bg-black/10'
                               }`}
-                              title={isRead ? 'إلغاء تحديد القراءة' : 'تحديد الحديث كمقروء (+10 نقاط)'}
+                              title={isRead ? 'إلغاء تحديد القراءة' : 'تحديد الحديث كمقروء'}
                             >
                               <CheckCircle2 className="w-4 h-4" />
                               <span>{isRead ? 'تمت القراءة' : 'تحديد كمقروء'}</span>

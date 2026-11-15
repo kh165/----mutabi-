@@ -29,6 +29,8 @@ import {
   Volume2,
 } from 'lucide-react';
 import { Logo } from '../components/layout/Logo.jsx';
+import { getCalculationMethod } from '../lib/prayerTimes.js';
+import { registerFcmToken } from '../lib/fcm.js';
 
 const TIMEZONES = [
   { value: 'Africa/Cairo', label: 'القاهرة (GMT+2 / GMT+3)' },
@@ -48,6 +50,7 @@ export function Profile() {
 
   const [displayName, setDisplayName] = useState(userDoc?.displayName || '');
   const [timezone, setTimezone] = useState(userDoc?.timezone || 'Africa/Cairo');
+  const [prayerMethod, setPrayerMethod] = useState(userDoc?.prayerMethod || 'auto');
   const [notifications, setNotifications] = useState(
     userDoc?.notifications || NOTIFICATION_DEFAULT_SETTINGS
   );
@@ -56,31 +59,44 @@ export function Profile() {
   const [error, setError] = useState(null);
 
   const handleToggleNotifications = async () => {
+    setError(null);
     if (!notifications.enabled) {
       const res = await requestNotificationPermission();
       if (!res.granted) {
         setError('يرجى السماح بإشعارات المتصفح حتى تتمكن من استلام التنبيهات');
         return;
       }
+      try {
+        const token = await registerFcmToken(user, timezone);
+        if (!token) throw new Error('FCM token registration unavailable');
+      } catch (err) {
+        console.error('Failed to register push token:', err);
+        setError('تعذر تفعيل إشعارات Push. يرجى المحاولة مجددًا');
+        return;
+      }
       setNotifications((prev) => ({ ...prev, enabled: true }));
       sendLocalNotification(
         'تم تفعيل تنبيهات مُتَابِـع 🕌',
-        'ستصلك إشعارات وتنبيهات الصلوات والأذكار في مواعيدها المحددة بإذن الله'
+        'تعمل التنبيهات أثناء فتح التطبيق أو في الخلفية القريبة، حسب دعم المتصفح وإذن الإشعارات'
       );
     } else {
       setNotifications((prev) => ({ ...prev, enabled: false }));
     }
   };
 
-  const handleTestNotification = () => {
+  const handleTestNotification = async () => {
     playNotificationTone();
-    const success = sendLocalNotification(
-      'تنبيه تجريبي من منصة مُتَابِـع 🔔',
-      'الصلاة خير من النوم، موعد صلاتك ووردك اليومي جاهز.'
-    );
-    if (!success) {
-      setError('يرجى التحقق من إذن الإشعارات في متصفحك');
+    setError(null);
+    try {
+      const success = await sendLocalNotification(
+        'تنبيه تجريبي من منصة مُتَابِـع 🔔',
+        'الصلاة خير من النوم، موعد صلاتك ووردك اليومي جاهز.'
+      );
+      if (success) return;
+    } catch (err) {
+      console.error('Failed to show test notification:', err);
     }
+    setError('يرجى التحقق من إذن الإشعارات في متصفحك');
   };
 
   const handleSaveProfile = async (e) => {
@@ -91,18 +107,30 @@ export function Profile() {
     setSavedSuccess(false);
 
     try {
+      const latestNotifications = userDoc?.notifications || NOTIFICATION_DEFAULT_SETTINGS;
+      const safeNotifications = {
+        ...notifications,
+        prayerTimesDate: latestNotifications.prayerTimesDate ?? notifications.prayerTimesDate,
+      };
+      if (latestNotifications.prayerTimesDate && latestNotifications.prayerTimesDate !== notifications.prayerTimesDate) {
+        for (const key of ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']) {
+          if (latestNotifications[key]) safeNotifications[key] = latestNotifications[key];
+        }
+      }
       if (updateUserDoc) {
         await updateUserDoc({
           displayName: displayName.trim(),
           timezone,
-          notifications,
+          prayerMethod,
+          notifications: safeNotifications,
         });
       } else {
         const userRef = doc(db, 'users', user.uid);
         await updateDoc(userRef, {
           displayName: displayName.trim(),
           timezone,
-          notifications,
+          prayerMethod,
+          notifications: safeNotifications,
         });
       }
       setSavedSuccess(true);
@@ -200,7 +228,10 @@ export function Profile() {
           </label>
           <select
             value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
+            onChange={(e) => {
+              setTimezone(e.target.value);
+              setNotifications((prev) => ({ ...prev, prayerTimesDate: null }));
+            }}
             className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-100 text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
           >
             {TIMEZONES.map((tz) => (
@@ -211,7 +242,33 @@ export function Profile() {
           </select>
         </div>
 
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            طريقة حساب المواقيت
+          </label>
+          <select
+            value={prayerMethod}
+            onChange={(e) => {
+              setPrayerMethod(e.target.value);
+              setNotifications((prev) => ({ ...prev, prayerTimesDate: null }));
+            }}
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          >
+            <option value="auto">تلقائي حسب المنطقة الزمنية ({getCalculationMethod(timezone)})</option>
+            <option value="5">الهيئة المصرية العامة للمساحة</option>
+            <option value="4">أم القرى - مكة المكرمة</option>
+            <option value="16">دبي</option>
+            <option value="23">وزارة الأوقاف الأردنية</option>
+            <option value="21">المغرب</option>
+            <option value="3">لجنة رؤية الهلال (Moonsighting Committee)</option>
+            <option value="2">الجمعية الإسلامية لأمريكا الشمالية</option>
+          </select>
+        </div>
         {/* Theme Preference */}
+
+
+
+
         <div>
           <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-1.5">
             <Palette className="w-3.5 h-3.5 text-slate-400" />
@@ -255,7 +312,7 @@ export function Profile() {
                   نظام التنبيهات المحلي (إشعارات المتصفح)
                 </h4>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  تنبيهات صوتية حقيقية للصلوات الخمس والأذكار والورد القرآني في مواعيدها
+                  تنبيهات محلية أثناء فتح التطبيق أو في الخلفية القريبة؛ لا نضمن عملها والهاتف مغلق تمامًا
                 </p>
               </div>
             </div>

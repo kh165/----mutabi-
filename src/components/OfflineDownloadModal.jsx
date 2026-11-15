@@ -99,7 +99,7 @@ export function OfflineDownloadModal({ isOpen, onClose }) {
   const handleStartDownload = async () => {
     if (selectedTier === 'complete' && navigator.onLine) {
       const confirmed = window.confirm(
-        'الحزمة الكاملة تشمل آلاف الملفات الصوتية وقد تتجاوز 1 جيجابايت. يُفضّل الاتصال بشبكة Wi-Fi. هل تريد المتابعة؟',
+        'الحزمة الكاملة تشمل تلاوات السور وقد تتجاوز 1 جيجابايت. يُفضّل الاتصال بشبكة Wi-Fi ومساحة تخزين كافية. هل تريد المتابعة؟',
       );
       if (!confirmed) return;
     }
@@ -272,7 +272,7 @@ export function OfflineDownloadModal({ isOpen, onClose }) {
                   id: 'complete',
                   title: 'الحزمة الكاملة بالصوتيات',
                   size: 'قد تتجاوز 1 جيجابايت',
-                  description: 'كل ما سبق وتلاوات السور والآيات. استخدم Wi-Fi ومساحة تخزين كافية.',
+                  description: 'كل ما سبق وتلاوات السور. لا يتم تنزيل ملف مستقل لكل آية؛ استخدم Wi-Fi ومساحة تخزين كافية.',
                   icon: Music2,
                 },
               ].map((option) => {

@@ -3,6 +3,7 @@ import { useActivities } from '../hooks/useActivities.js';
 import { useLogs } from '../hooks/useLogs.js';
 import { formatArabicDate } from '../lib/dates.js';
 import { getSurah } from '../data/quran.js';
+import { getPrayerArabicName } from '../lib/prayerNames.js';
 import {
   History as HistoryIcon,
   Trash2,
@@ -205,7 +206,7 @@ export function History() {
                                     : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                                 }`}
                               >
-                                {p.title}: {isJamaah ? 'جماعة ✓' : isIndiv ? 'منفرداً ✓' : isMissed ? 'لم أصلِّ' : '—'}
+                                صلاة {getPrayerArabicName(p.id, p.title)}: {isJamaah ? 'جماعة ✓' : isIndiv ? 'منفرداً ✓' : isMissed ? 'لم أصلِّ' : '—'}
                                 {p.note && ` (${p.note})`}
                               </span>
                             );

@@ -18,7 +18,7 @@ import { settleOrTimeout } from './async.js';
 
 const QUEUE_STORAGE_KEY = 'mutabi_offline_queue';
 const OFFLINE_PACKAGE_KEY = 'mutabi_offline_package_status';
-const OFFLINE_PACKAGE_VERSION = 3;
+const OFFLINE_PACKAGE_VERSION = 4;
 const QURAN_MEDIA_CACHE = 'quran-audio-cache';
 const QURAN_PAGE_CACHE = 'quran-pages-cache';
 const OFFLINE_CACHE_NAMES = [
@@ -37,6 +37,8 @@ let offlineDownloadPromise = null;
 /**
  * Get pending mutations from localStorage
  */
+/** @returns {Array<Object>} */
+/** @returns {Array<Object>} */
 export function getOfflineQueue() {
   try {
     const raw = localStorage.getItem(QUEUE_STORAGE_KEY);
@@ -58,6 +60,8 @@ function saveOfflineQueue(queue) {
 /**
  * Enqueue an offline action (deduplicating by action ID)
  */
+/** @param {Object} action */
+/** @param {Object} action */
 export function enqueueOfflineAction(action) {
   const current = getOfflineQueue();
   const actionKey = action.key || `${action.type}_${action.id || Date.now()}`;
@@ -73,11 +77,16 @@ export function enqueueOfflineAction(action) {
   }
   
   saveOfflineQueue(updated);
+  if (typeof navigator !== 'undefined' && navigator.onLine) {
+    scheduleOfflineSyncRetry(1000);
+  }
 }
 
 /**
  * Remove an action from the queue by key
  */
+/** @param {string} actionKey */
+/** @param {string} actionKey */
 export function removeOfflineAction(actionKey) {
   const current = getOfflineQueue();
   const updated = current.filter((item) => (item.key || `${item.type}_${item.id}`) !== actionKey);
@@ -94,20 +103,89 @@ function notifyQueueChange() {
 }
 
 let offlineSyncPromise = null;
+let offlineSyncRetryTimer = null;
+let offlineSyncRetryAttempt = 0;
+
+function getOfflineActionUid(action) {
+  if (action.type === 'SAVE_LOG') return action.data?.uid;
+  if (action.type === 'DELETE_LOG') return action.uid;
+  if (action.type === 'UPDATE_USER' || action.type === 'MARK_NOTE_READ') return action.uid;
+  if (
+    ['SAVE_TODO', 'DELETE_TODO', 'SYNC_TODOS', 'SAVE_ADHKAR'].includes(action.type)
+  ) return action.uid;
+  if (action.type === 'SAVE_ITEM_PROGRESS') return action.data?.uid;
+  if (action.type === 'DELETE_ITEM_PROGRESS') return action.uid;
+  return null;
+}
+
+function belongsToUser(action, uid) {
+  const actionUid = getOfflineActionUid(action);
+  if (actionUid) return actionUid === uid;
+  if (action.type === 'DELETE_LOG') {
+    return String(action.logId || '').startsWith(`${uid}_`);
+  }
+  return true;
+}
+
+function isRetryableSyncError(error) {
+  return (
+    !navigator.onLine ||
+    ['unavailable', 'deadline-exceeded', 'network-request-failed', 'timeout', 'failed-precondition'].includes(error?.code) ||
+    error?.message?.includes('offline') ||
+    error?.message?.includes('Failed to fetch')
+  );
+}
+
+function scheduleOfflineSyncRetry(delay) {
+  if (typeof window === 'undefined' || !navigator.onLine || offlineSyncRetryTimer) return;
+  const retryDelay = delay ?? Math.min(5 * 60 * 1000, 5000 * (2 ** offlineSyncRetryAttempt));
+  offlineSyncRetryAttempt = Math.min(offlineSyncRetryAttempt + 1, 6);
+  offlineSyncRetryTimer = window.setTimeout(() => {
+    offlineSyncRetryTimer = null;
+    syncPendingOfflineData().catch((error) => {
+      console.warn('Automatic offline sync retry failed:', error);
+    });
+  }, retryDelay);
+}
 
 async function waitForCloudWrite(writePromise) {
   const result = await settleOrTimeout(writePromise, 10000);
-  if (result === 'pending') throw new Error('Cloud write timed out; the action remains queued.');
+  if (result === 'pending') {
+    const error = new Error('Cloud write timed out; the action remains queued.');
+    error.code = 'unavailable';
+    throw error;
+  }
 }
 
 /**
  * Sync all pending offline actions to Firestore
  */
 export function syncPendingOfflineData() {
+  if (offlineSyncRetryTimer) {
+    window.clearTimeout(offlineSyncRetryTimer);
+    offlineSyncRetryTimer = null;
+  }
   if (!offlineSyncPromise) {
-    offlineSyncPromise = performOfflineSync().finally(() => {
-      offlineSyncPromise = null;
-    });
+    offlineSyncPromise = performOfflineSync()
+      .catch((error) => {
+        const retryable = isRetryableSyncError(error);
+        window.dispatchEvent(
+          new CustomEvent('mutabi_sync_status', {
+            detail: {
+              isSyncing: false,
+              pendingCount: getOfflineQueue().length,
+              syncedCount: 0,
+              failedCount: 1,
+              retryableCount: retryable ? 1 : 0,
+            },
+          }),
+        );
+        if (retryable) scheduleOfflineSyncRetry();
+        throw error;
+      })
+      .finally(() => {
+        offlineSyncPromise = null;
+      });
   }
   return offlineSyncPromise;
 }
@@ -119,8 +197,10 @@ async function performOfflineSync() {
   if (!auth.currentUser || !navigator.onLine) {
     return { synced: 0, pending: getOfflineQueue().length };
   }
-  const queue = getOfflineQueue();
-  if (queue.length === 0) return { synced: 0, pending: 0 };
+  const queue = getOfflineQueue().filter((action) => {
+    return belongsToUser(action, auth.currentUser.uid);
+  });
+  if (queue.length === 0) return { synced: 0, pending: getOfflineQueue().length };
 
   window.dispatchEvent(
     new CustomEvent('mutabi_sync_status', {
@@ -130,19 +210,27 @@ async function performOfflineSync() {
 
   let successCount = 0;
   let failedCount = 0;
-  let pendingCount = queue.length;
+  let retryableFailureCount = 0;
+  let pendingCount = getOfflineQueue().length;
   const completedActions = [];
 
   for (const action of queue) {
     try {
       if (action.type === 'SAVE_LOG') {
         const ref = doc(db, 'logs', action.logId);
+        const logData = {
+          ...action.data,
+          ...(action.isNew ? { createdAt: serverTimestamp() } : {}),
+          updatedAt: serverTimestamp(),
+        };
         await waitForCloudWrite(
-          setDoc(
-            ref,
-            { ...action.data, updatedAt: serverTimestamp() },
-            { merge: true },
-          ),
+          setDoc(ref, logData, {
+            mergeFields: [
+              'id', 'uid', 'activityId', 'date', 'amount', 'completed',
+              'details', 'note', 'updatedAt',
+              ...(action.isNew ? ['createdAt'] : []),
+            ],
+          }),
         );
       } else if (action.type === 'DELETE_LOG') {
         await waitForCloudWrite(deleteDoc(doc(db, 'logs', action.logId)));
@@ -250,6 +338,7 @@ async function performOfflineSync() {
     } catch (err) {
       console.warn('Sync failed for item:', action.key, err);
       failedCount++;
+      if (isRetryableSyncError(err)) retryableFailureCount++;
     }
   }
 
@@ -278,19 +367,32 @@ async function performOfflineSync() {
         pendingCount,
         syncedCount: successCount,
         failedCount,
+        retryableCount: retryableFailureCount,
         lastSyncTime: nowStr,
       },
     })
   );
 
-  return { synced: successCount, pending: pendingCount, failed: failedCount };
+  if (retryableFailureCount > 0) {
+    scheduleOfflineSyncRetry();
+  } else {
+    offlineSyncRetryAttempt = 0;
+  }
+
+  return {
+    synced: successCount,
+    pending: pendingCount,
+    failed: failedCount,
+    retryable: retryableFailureCount,
+  };
 }
 
 // Automatically trigger sync when the device reconnects to internet
 if (typeof window !== 'undefined') {
   window.addEventListener('online', () => {
     console.info('Reconnected to internet. Initiating automatic Firestore background sync...');
-    syncPendingOfflineData().catch((err) => console.warn('Auto-sync error:', err));
+    offlineSyncRetryAttempt = 0;
+    scheduleOfflineSyncRetry(1500);
   });
 }
 
@@ -430,8 +532,12 @@ async function cacheResource(cache, url) {
   const timeoutId = setTimeout(() => controller.abort(), 20000);
   let response;
   try {
-    // The media hosts do not expose CORS; opaque responses can still be cached and played.
-    response = await fetch(url, { signal: controller.signal, mode: 'no-cors' });
+    try {
+      response = await fetch(url, { signal: controller.signal, mode: 'cors' });
+    } catch (corsError) {
+      // بعض مصادر الوسائط لا تعرض CORS؛ نستخدم opaque كحل احتياطي.
+      response = await fetch(url, { signal: controller.signal, mode: 'no-cors' });
+    }
   } finally {
     clearTimeout(timeoutId);
   }
@@ -468,6 +574,17 @@ export async function downloadOfflinePackage(tier = 'basic', onProgress) {
   }
 
   offlineDownloadPromise = (async () => {
+    const storageEstimate = await navigator.storage?.estimate?.();
+    const availableBytes = Number(storageEstimate?.quota || 0) - Number(storageEstimate?.usage || 0);
+    const minimumBytesByTier = {
+      basic: 50 * 1024 * 1024,
+      reading: 250 * 1024 * 1024,
+      complete: 1024 * 1024 * 1024,
+    };
+    if (availableBytes > 0 && availableBytes < minimumBytesByTier[tier]) {
+      throw new Error('المساحة المتاحة على جهازك غير كافية لهذه الحزمة. احذف بعض الملفات أو اختر حزمة أصغر.');
+    }
+
     const packageStatus = {
       version: OFFLINE_PACKAGE_VERSION,
       isReady: false,
@@ -490,9 +607,10 @@ export async function downloadOfflinePackage(tier = 'basic', onProgress) {
     const totalAyahs = SURAHS.reduce((total, surah) => total + surah.ayahsCount, 0);
     const includeAudio = OFFLINE_TIERS[tier] >= OFFLINE_TIERS.complete;
     const includePages = OFFLINE_TIERS[tier] >= OFFLINE_TIERS.reading;
+    // الحزمة الكاملة تحفظ ملف كل سورة فقط؛ لا تنزّل ملفًا لكل آية.
     const totalResources = chapterCount * 2 + hadithBooks.length +
       (includePages ? TOTAL_PAGES : 0) +
-      (includeAudio ? totalAyahs + chapterCount : 0);
+      (includeAudio ? chapterCount : 0);
     let completed = 0;
 
     const report = (title) => {
@@ -560,15 +678,6 @@ export async function downloadOfflinePackage(tier = 'basic', onProgress) {
         const audioUrls = SURAHS.map(
           (surah) => `https://cdn.islamic.network/quran/audio-surah/128/ar.alafasy/${surah.number}.mp3`,
         );
-        let globalAyahNumber = 0;
-        for (const surah of SURAHS) {
-          for (let ayahNumber = 0; ayahNumber < surah.ayahsCount; ayahNumber++) {
-            globalAyahNumber++;
-            audioUrls.push(
-              `https://cdn.islamic.network/quran/audio/128/ar.alafasy/${globalAyahNumber}.mp3`,
-            );
-          }
-        }
         await cacheResources(audioCache, audioUrls, () =>
           completeOne('تنزيل تلاوات القرآن الصوتية'),
         );
@@ -596,7 +705,7 @@ export async function downloadOfflinePackage(tier = 'basic', onProgress) {
           ? 'اكتمل تنزيل المحتوى الأساسي.'
           : tier === 'reading'
             ? 'اكتمل تنزيل مكتبة القراءة.'
-            : 'اكتمل تنزيل المحتوى والصوتيات.',
+            : 'اكتمل تنزيل المحتوى وتلاوات السور.',
       lastDownload: new Date().toISOString(),
       downloadedTier: tier,
       selectedTier: tier,
@@ -605,7 +714,7 @@ export async function downloadOfflinePackage(tier = 'basic', onProgress) {
         hadithBooks: hadithBooks.length,
         hadiths: FORTY_HADITHS.length,
         pages: includePages ? TOTAL_PAGES : 0,
-        ayahAudio: includeAudio ? totalAyahs : 0,
+        ayahAudio: 0,
         surahAudio: includeAudio ? chapterCount : 0,
         morningAdhkar: MORNING_ADHKAR.length,
         eveningAdhkar: EVENING_ADHKAR.length,

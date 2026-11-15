@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-sans: "Cairo", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Amiri", "Scheherazade New", Georgia, serif;
+}
+
 @layer base {
   html, body {
     overflow-x: hidden;

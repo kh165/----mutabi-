@@ -10,7 +10,6 @@ import { ProgressRing } from '../components/ProgressRing.jsx';
 import { MonthlyWorshipCalendar } from '../components/MonthlyWorshipCalendar.jsx';
 import { PrayerTimesBar } from '../components/PrayerTimesBar.jsx';
 import { QuranReaderModal } from '../components/QuranReaderModal.jsx';
-import { AdhkarReaderModal } from '../components/AdhkarReaderModal.jsx';
 import { getTodayDateString, getPastDaysList, formatArabicDate } from '../lib/dates.js';
 import { calculateKhatma, getLatestMemorizedPosition } from '../lib/stats.js';
 import {
@@ -31,7 +30,7 @@ import {
 } from 'lucide-react';
 import { getOfflinePackageStatus } from '../lib/offlineSync.js';
 
-export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTodos }) {
+export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTodos, onNavigateToAdhkar }) {
   const { user, userDoc, isAdmin, updateUserDoc } = useAuth();
   const { isDark } = useTheme();
   const { activities, loading: loadingActivities, seedPresetsToDatabase } = useActivities(false);
@@ -46,8 +45,6 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
 
   // Quick Reader Modals from the Hero Launchpad
   const [quranModalOpen, setQuranModalOpen] = useState(false);
-  const [adhkarModalOpen, setAdhkarModalOpen] = useState(false);
-  const [adhkarInitialCategory, setAdhkarInitialCategory] = useState('morning');
 
   // Celebratory encouragement banner
   const [encouragementBanner, setEncouragementBanner] = useState(null);
@@ -230,8 +227,7 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
       hoverText: 'group-hover:text-amber-200',
       subColor: 'text-amber-200/80',
       onClick: () => {
-        setAdhkarInitialCategory(new Date().getHours() < 13 ? 'morning' : 'evening');
-        setAdhkarModalOpen(true);
+        onNavigateToAdhkar?.(new Date().getHours() < 13 ? 'morning' : 'evening');
       },
     },
     {
@@ -451,6 +447,7 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
           <MonthlyWorshipCalendar
             logs={logs}
             activities={activities}
+            todayStr={todayStr}
             onToggleFasting={handleToggleFasting}
             onSelectDate={(targetDate) => {
               setSelectedDate(targetDate);
@@ -632,31 +629,34 @@ export function Today({ onNavigateToTasbeeh, onNavigateToHadith, onNavigateToTod
         onLogPagesRead={async (surah) => {
           const readAct = activities.find((a) => a.type === 'read' || a.title.includes('تلاوة'));
           if (readAct) {
+            const currentLog = logs.find(
+              (log) => log.activityId === readAct.id && log.date === selectedDate
+            );
+            const page = Number(surah.startPage);
+            const pagesRead = [...new Set([...(currentLog?.details?.pagesRead || []), page])]
+              .filter((value) => Number.isInteger(value) && value > 0 && value <= 604)
+              .sort((a, b) => a - b);
+            const amount = Math.max(Number(currentLog?.amount) || 0, pagesRead.length);
             await saveLog(
               readAct.id,
               selectedDate,
-              1,
+              amount,
               true,
-              { surah: surah.name, page: surah.startPage, fromPage: surah.startPage, toPage: surah.startPage },
-              `قراءة الصفحة ${surah.startPage} من سورة ${surah.name}`,
+              {
+                ...currentLog?.details,
+                surah: surah.name,
+                page,
+                lastPage: page,
+                pagesRead,
+                pagesCount: amount,
+              },
+              `قراءة الصفحة ${page} من سورة ${surah.name}`,
             );
           }
         }}
       />
 
-      {/* Hero-accessible Adhkar Reader Modal */}
-      <AdhkarReaderModal
-        isOpen={adhkarModalOpen}
-        onClose={() => setAdhkarModalOpen(false)}
-        initialCategory={adhkarInitialCategory}
-        onCompleteCategory={async (title) => {
-          const adhkarAct = activities.find((a) => a.title.includes('أذكار'));
-          if (adhkarAct) {
-            await saveLog(adhkarAct.id, selectedDate, 1, true, { category: title }, title);
-            handleAchievement(title);
-          }
-        }}
-      />
+
     </div>
   );
 }

@@ -2,6 +2,8 @@
  * Date calculations and Arabic formatting respecting user timezone.
  */
 
+/** @param {string} timeZone @returns {string} */
+/** @param {string} timeZone @returns {string} */
 export function getTodayDateString(timeZone = 'Africa/Cairo') {
   try {
     const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -20,6 +22,8 @@ export function getTodayDateString(timeZone = 'Africa/Cairo') {
   }
 }
 
+/** @param {string} baseDate @param {number} daysOffset @returns {string} */
+/** @param {string} baseDate @param {number} daysOffset @returns {string} */
 export function getDateOffset(baseDate, daysOffset) {
   const d = new Date(`${baseDate}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + daysOffset);

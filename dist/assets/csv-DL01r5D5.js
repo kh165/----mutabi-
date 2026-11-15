@@ -1,0 +1,2 @@
+function e(e,t,n){let r=`﻿`+[t.map(e=>`"${String(e).replace(/"/g,`""`)}"`).join(`,`),...n.map(e=>e.map(e=>`"${String(e??``).replace(/"/g,`""`)}"`).join(`,`))].join(`\r
+`),i=new Blob([r],{type:`text/csv;charset=utf-8;`}),a=URL.createObjectURL(i),o=document.createElement(`a`);o.setAttribute(`href`,a),o.setAttribute(`download`,`${e}.csv`),document.body.appendChild(o),o.click(),document.body.removeChild(o),URL.revokeObjectURL(a)}export{e as t};

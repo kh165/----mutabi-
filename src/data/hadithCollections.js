@@ -17,7 +17,7 @@ export const HADITH_COLLECTIONS = [
     name: 'صحيح البخاري',
     author: 'الإمام محمد بن إسماعيل البخاري',
     badge: 'أصح الكتب',
-    totalHadiths: 7563,
+    totalHadiths: 7589,
   },
   {
     id: 'muslim',

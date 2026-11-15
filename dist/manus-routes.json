@@ -1,0 +1,48 @@
+{
+  "routes": [
+    {
+      "path": "/#today",
+      "title": "الورد اليومي"
+    },
+    {
+      "path": "/#tasbeeh",
+      "title": "التسبيح"
+    },
+    {
+      "path": "/#adhkar",
+      "title": "الأذكار"
+    },
+    {
+      "path": "/#salawat",
+      "title": "الصلوات"
+    },
+    {
+      "path": "/#hadith",
+      "title": "الأحاديث النبوية"
+    },
+    {
+      "path": "/#library",
+      "title": "المكتبة الإسلامية"
+    },
+    {
+      "path": "/#todos",
+      "title": "قائمة المهام"
+    },
+    {
+      "path": "/#progress",
+      "title": "التقدم والأوسمة"
+    },
+    {
+      "path": "/#history",
+      "title": "سجل الإنجازات"
+    },
+    {
+      "path": "/#profile",
+      "title": "الملف الشخصي"
+    },
+    {
+      "path": "/#admin",
+      "title": "لوحة الإدارة"
+    }
+  ]
+}

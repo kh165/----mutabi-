@@ -47,33 +47,44 @@ function legacyEntries(legacyProgress = {}) {
 export function useHadithProgress(uid, legacyProgress) {
   const [entries, setEntries] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [syncError, setSyncError] = useState(null);
   const migrationAttempted = useRef(false);
 
   useEffect(() => {
     if (!uid) {
       setEntries([]);
       setLoaded(true);
+      setSyncError(null);
       return undefined;
     }
 
     setLoaded(false);
+    setSyncError(null);
     const progressRef = collection(db, 'users', uid, 'hadithProgress');
     const unsubscribe = onSnapshot(
       progressRef,
       (snapshot) => {
         const nextEntries = snapshot.docs
           .map((snapshotDoc) => ({ id: snapshotDoc.id, ...snapshotDoc.data() }))
-          .filter((entry) => entry.hadithId && entry.collectionId);
+          .filter((entry) => {
+            const data = /** @type {any} */ (entry);
+            return data.hadithId && data.collectionId;
+          });
         setEntries(nextEntries);
+        setSyncError(null);
         setLoaded(true);
       },
-      () => setLoaded(true)
+      (error) => {
+        console.error('Failed to load hadith progress:', error);
+        setSyncError(error);
+        setLoaded(true);
+      }
     );
     return () => unsubscribe();
   }, [uid]);
 
   useEffect(() => {
-    if (!uid || !loaded || migrationAttempted.current || entries.length > 0) return;
+    if (!uid || !loaded || syncError || migrationAttempted.current || entries.length > 0) return;
     const oldEntries = legacyEntries(legacyProgress);
     if (!oldEntries.length) return;
     migrationAttempted.current = true;
@@ -90,14 +101,19 @@ export function useHadithProgress(uid, legacyProgress) {
         updatedAt: serverTimestamp(),
       });
     });
-    batch.commit().catch(() => {});
-  }, [uid, loaded, entries.length, legacyProgress]);
+    batch.commit().catch((error) => {
+      console.error('Failed to migrate legacy hadith progress:', error);
+      setSyncError(error);
+    });
+  }, [uid, loaded, syncError, entries.length, legacyProgress]);
 
   const maps = mapsFromEntries(entries);
   const legacyMaps = mapsFromEntries(legacyEntries(legacyProgress));
 
   const setHadithProgress = async (collectionId, hadithId, values) => {
-    if (!uid) return;
+    if (!uid) {
+      throw new Error('يجب تسجيل الدخول لحفظ تقدم الأحاديث.');
+    }
     const ref = doc(db, 'users', uid, 'hadithProgress', progressDocId(collectionId, hadithId));
     const next = {
       uid,
@@ -107,16 +123,37 @@ export function useHadithProgress(uid, legacyProgress) {
       bookmarked: values.bookmarked === true,
       updatedAt: serverTimestamp(),
     };
-    if (!next.read && !next.bookmarked) {
-      await deleteDoc(ref);
-      return;
+    const previousEntry = entries.find((entry) => entry.id === ref.id) || null;
+    const optimisticEntry = {
+      ...next,
+      id: ref.id,
+      updatedAt: new Date().toISOString(),
+    };
+    setEntries((current) => {
+      const remaining = current.filter((entry) => entry.id !== ref.id);
+      return next.read || next.bookmarked ? [...remaining, optimisticEntry] : remaining;
+    });
+    try {
+      if (!next.read && !next.bookmarked) {
+        await deleteDoc(ref);
+      } else {
+        await setDoc(ref, next, { merge: true });
+      }
+      setSyncError(null);
+    } catch (error) {
+      setEntries((current) => {
+        const remaining = current.filter((entry) => entry.id !== ref.id);
+        return previousEntry ? [...remaining, previousEntry] : remaining;
+      });
+      setSyncError(error);
+      throw error;
     }
-    await setDoc(ref, next, { merge: true });
   };
 
   return {
     readMap: { ...legacyMaps.read, ...maps.read },
     bookmarkedMap: { ...legacyMaps.bookmarked, ...maps.bookmarked },
+    syncError,
     setHadithProgress,
   };
 }

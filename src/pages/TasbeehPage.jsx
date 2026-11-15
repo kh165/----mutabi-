@@ -12,6 +12,7 @@ export function TasbeehPage() {
   const { logs, saveLog } = useLogs();
   const { activities } = useActivities(false);
   const [successBanner, setSuccessBanner] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   // نستخدم نفس نشاط "عداد التسبيح" الموجود في الصفحة الرئيسية حتى تتطابق الأرقام في الصفحتين
   const tasbeehActivity = activities.find((a) => a.title?.includes('التسبيح'));
@@ -63,7 +64,10 @@ export function TasbeehPage() {
     pendingRef.current = [total, title, counterState];
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      flushPending().catch((err) => console.error('Error auto-saving tasbeeh:', err));
+      flushPending().catch((err) => {
+        console.error('Error auto-saving tasbeeh:', err);
+        setSaveError('تعذر حفظ التسبيح تلقائيًا. تحقق من الاتصال ثم اضغط حفظ لإعادة المحاولة.');
+      });
     }, 1000);
     return Promise.resolve();
   };
@@ -75,6 +79,7 @@ export function TasbeehPage() {
   }, []);
 
   const handleSaveTasbeeh = async (count, dhikrTitle, counterState) => {
+    setSaveError(null);
     try {
       // المودال بيستدعي onSaveCount(1, عنوانالقسم) بدون counterState عند إتمام قسم أذكار
       // ده لازم يتسجل في نشاط الأذكار مش يمسح إجمالي التسبيح
@@ -99,12 +104,19 @@ export function TasbeehPage() {
       setTimeout(() => setSuccessBanner(null), 5000);
     } catch (err) {
       console.error('Error saving tasbeeh:', err);
+      setSaveError('تعذر حفظ التسبيح. تحقق من الاتصال والصلاحيات ثم حاول مرة أخرى.');
       throw err;
     }
   };
 
   return (
     <div className="space-y-6 text-right max-w-4xl mx-auto">
+      {saveError && (
+        <div role="alert" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md rounded-2xl bg-rose-700 px-4 py-3 text-sm font-bold text-white shadow-xl">
+          {saveError}
+          <button type="button" onClick={() => setSaveError(null)} className="ms-3 underline">إغلاق</button>
+        </div>
+      )}
       {successBanner && (
         <div className="bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 rounded-3xl p-4 flex items-center justify-between gap-3 text-emerald-900 dark:text-emerald-200 text-xs sm:text-sm font-bold shadow-sm animate-in fade-in">
           <div className="flex items-center gap-2">

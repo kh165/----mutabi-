@@ -171,6 +171,7 @@ export function AdminDashboard() {
   const [noteSending, setNoteSending] = useState(false);
   const [noteSuccess, setNoteSuccess] = useState(false);
   const [noteError, setNoteError] = useState(null);
+  const [adminActionError, setAdminActionError] = useState(null);
 
   // Encouragement phrase state
   const [newPhraseText, setNewPhraseText] = useState('');
@@ -328,10 +329,14 @@ export function AdminDashboard() {
   const handleAddPhrase = async (e) => {
     e.preventDefault();
     if (!newPhraseText.trim()) return;
+    setAdminActionError(null);
     setAddingPhrase(true);
     try {
       await addPhrase(newPhraseText.trim());
       setNewPhraseText('');
+    } catch (error) {
+      console.error('Failed to add encouragement phrase:', error);
+      setAdminActionError('تعذر حفظ العبارة التشجيعية. تحقق من الصلاحيات والاتصال ثم حاول مرة أخرى.');
     } finally {
       setAddingPhrase(false);
     }
@@ -350,18 +355,28 @@ export function AdminDashboard() {
   const handleSaveActivityForm = async (e) => {
     e.preventDefault();
     if (!editingActivity) return;
-    await saveActivity(editingActivity);
-    setActivityModalOpen(false);
-    setEditingActivity(null);
+    setAdminActionError(null);
+    try {
+      await saveActivity(editingActivity);
+      setActivityModalOpen(false);
+      setEditingActivity(null);
+    } catch (error) {
+      console.error('Failed to save activity:', error);
+      setAdminActionError('تعذر حفظ النشاط. تحقق من الصلاحيات والاتصال ثم حاول مرة أخرى.');
+    }
   };
 
   const handleSeedPresets = async () => {
     setSeeding(true);
     setSeedSuccess(false);
+    setAdminActionError(null);
     try {
       await seedPresetsToDatabase();
       setSeedSuccess(true);
       setTimeout(() => setSeedSuccess(false), 3000);
+    } catch (error) {
+      console.error('Failed to seed preset activities:', error);
+      setAdminActionError('تعذر تهيئة الأنشطة المقترحة. تحقق من الصلاحيات والاتصال ثم حاول مرة أخرى.');
     } finally {
       setSeeding(false);
     }
@@ -370,10 +385,16 @@ export function AdminDashboard() {
   const handleAddFivePrayersDirectly = async () => {
     const prayerPreset = INITIAL_PRESETS.find((p) => p.type === 'prayers');
     if (prayerPreset) {
-      await saveActivity({
-        ...prayerPreset,
-        order: activities.length + 1,
-      });
+      setAdminActionError(null);
+      try {
+        await saveActivity({
+          ...prayerPreset,
+          order: activities.length + 1,
+        });
+      } catch (error) {
+        console.error('Failed to add prayer activity:', error);
+        setAdminActionError('تعذر إضافة نشاط الصلوات. تحقق من الصلاحيات والاتصال ثم حاول مرة أخرى.');
+      }
     }
   };
 
@@ -417,6 +438,12 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6 text-right">
+      {adminActionError && (
+        <div role="alert" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-800 shadow-xl dark:border-rose-900 dark:bg-rose-950/90 dark:text-rose-200">
+          {adminActionError}
+          <button type="button" onClick={() => setAdminActionError(null)} className="ms-3 underline">إغلاق</button>
+        </div>
+      )}
       {/* Top Admin Header */}
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -979,7 +1006,7 @@ export function AdminDashboard() {
                     <p className="py-4 text-center text-xs text-slate-500">لا توجد رسائل سابقة لهذا المستخدم.</p>
                   ) : (
                     selectedUserNotes.map((note) => (
-                      <MessageThreadCard key={note.id} note={note} />
+                      <MessageThreadCard key={note.id} note={note} onReply={undefined} />
                     ))
                   )}
                 </div>
@@ -1575,10 +1602,12 @@ function VideoManagerModal({ activityId, onClose }) {
   const [url, setUrl] = useState('');
   const [duration, setDuration] = useState(15);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const handleAddVideo = async (e) => {
     e.preventDefault();
     if (!title.trim() || !url.trim()) return;
+    setSaveError(null);
     setSaving(true);
     try {
       await saveActivityItem({
@@ -1590,6 +1619,9 @@ function VideoManagerModal({ activityId, onClose }) {
       setTitle('');
       setUrl('');
       setDuration(15);
+    } catch (error) {
+      console.error('Failed to add YouTube video:', error);
+      setSaveError('تعذر حفظ الفيديو. تحقق من الصلاحيات والاتصال ثم حاول مرة أخرى.');
     } finally {
       setSaving(false);
     }
@@ -1624,6 +1656,11 @@ function VideoManagerModal({ activityId, onClose }) {
 
         {/* Add video form */}
         <form onSubmit={handleAddVideo} className="space-y-3 p-4 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700">
+          {saveError && (
+            <p role="alert" className="rounded-xl bg-rose-100 px-3 py-2 text-xs font-bold text-rose-800 dark:bg-rose-950/60 dark:text-rose-200">
+              {saveError}
+            </p>
+          )}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
               عنوان الدرس أو المقطع

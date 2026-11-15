@@ -132,6 +132,19 @@ export function QuranReaderModal({
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const readerCanvasRef = useRef(null);
+  const scrollReaderElement = (element, behavior = 'smooth', block = 'start') => {
+    const container = readerCanvasRef.current;
+    if (!container || !element || !container.contains(element)) return;
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    let top = container.scrollTop + elementRect.top - containerRect.top;
+    if (block === 'center') {
+      top -= (container.clientHeight - elementRect.height) / 2;
+    } else if (block === 'end') {
+      top -= container.clientHeight - elementRect.height;
+    }
+    container.scrollTo({ top: Math.max(0, top), behavior });
+  };
   const [reciter, setReciter] = useState(() => localStorage.getItem('mutabi_quran_reciter') || 'husary');
   const reciterRef = useRef(reciter);
   reciterRef.current = reciter;
@@ -313,7 +326,7 @@ export function QuranReaderModal({
     const timer = setTimeout(() => {
       const el = document.getElementById(`ayah-${highlightedAyahNumber}`);
       if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollReaderElement(el, 'smooth', 'center');
         setHighlightedAyahNumber(null);
       }
     }, 150);
@@ -433,7 +446,7 @@ export function QuranReaderModal({
       const pageElement = document.getElementById(`quran-page-${targetPage}`);
       if (pageElement) {
         readingPositionRestoredRef.current = true;
-        pageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollReaderElement(pageElement, 'smooth', 'start');
         pendingPageNavigationRef.current = null;
         return undefined;
       }
@@ -491,7 +504,7 @@ export function QuranReaderModal({
       const savedPage = document.getElementById(`quran-page-${saved.pageNumber}`);
       if (savedPage) {
         ignoreScrollUntilRef.current = Date.now() + 700;
-        savedPage.scrollIntoView({ behavior: 'auto', block: 'start' });
+        scrollReaderElement(savedPage, 'auto', 'start');
         return undefined;
       }
     }
@@ -742,10 +755,11 @@ export function QuranReaderModal({
       if (targetAyah) {
         setCurrentDivision(getQuranDivisionByAyah(targetAyah));
         requestAnimationFrame(() => {
-          document.getElementById(`quran-page-${page}`)?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-          });
+          scrollReaderElement(
+            document.getElementById(`quran-page-${page}`),
+            'smooth',
+            'start'
+          );
         });
       }
     }
@@ -817,10 +831,10 @@ export function QuranReaderModal({
 
     setTimeout(() => {
       const pageEl = document.getElementById(`quran-page-${savedBookmark.pageNumber}`);
-      pageEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      scrollReaderElement(pageEl, 'smooth', 'start');
       if (savedBookmark.ayahNumber) {
         const ayahEl = document.getElementById(`ayah-${savedBookmark.ayahNumber}`);
-        ayahEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollReaderElement(ayahEl, 'smooth', 'center');
       }
     }, 200);
   };
@@ -952,10 +966,11 @@ export function QuranReaderModal({
       if (token !== audioTokenRef.current) return;
       audioAyahRef.current = ayahNumber;
       setPlayingAyahNumber(ayahNumber);
-      document.getElementById(`ayah-${ayahNumber}`)?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
+      scrollReaderElement(
+        document.getElementById(`ayah-${ayahNumber}`),
+        'smooth',
+        'center'
+      );
 
       const reciterNow = getCurrentReciter();
       audio.onended = () => {
@@ -1490,10 +1505,10 @@ export function QuranReaderModal({
                     showToast(`تم الانتقال إلى سورة ${previousAlert.surahName} (صفحة ${previousAlert.pageNumber})`);
                     setTimeout(() => {
                       const pageEl = document.getElementById(`quran-page-${previousAlert.pageNumber}`);
-                      pageEl?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      scrollReaderElement(pageEl, 'smooth', 'start');
                       if (previousAlert.ayahNumber) {
                         const ayahEl = document.getElementById(`ayah-${previousAlert.ayahNumber}`);
-                        ayahEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        scrollReaderElement(ayahEl, 'smooth', 'center');
                       }
                     }, 200);
                   }}

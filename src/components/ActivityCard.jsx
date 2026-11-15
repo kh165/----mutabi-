@@ -24,6 +24,7 @@ export function ActivityCard({
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTarget, setEditingTarget] = useState(false);
+  const [saveError, setSaveError] = useState(null);
   // الهدف المحلي بيظهر فوراً حتى لو الحفظ في السيرفر اتأخر
   const [localTarget, setLocalTarget] = useState(null);
 
@@ -78,46 +79,64 @@ export function ActivityCard({
   const handleQuickCheckboxToggle = async (e) => {
     e.stopPropagation();
     const nextCompleted = !isCompleted;
-    if (nextCompleted) {
-      triggerConfetti();
-      onAchievement?.(activity.title);
+    try {
+      await onSaveLog(
+        activity.id,
+        dateStr,
+        nextCompleted ? 1 : 0,
+        nextCompleted,
+        log?.details || {},
+        log?.note || null
+      );
+      setSaveError(null);
+      if (nextCompleted) {
+        triggerConfetti();
+        onAchievement?.(activity.title);
+      }
+    } catch (error) {
+      console.error('Failed to save activity checkbox:', error);
+      setSaveError('تعذر حفظ الإنجاز. تحقق من الاتصال والصلاحيات ثم حاول مرة أخرى.');
     }
-    await onSaveLog(
-      activity.id,
-      dateStr,
-      nextCompleted ? 1 : 0,
-      nextCompleted,
-      log?.details || {},
-      log?.note || null
-    );
   };
 
   const handleQuickIncrement = async (e) => {
     e.stopPropagation();
     const nextAmount = currentAmount + 1;
     const nextCompleted = effectiveTarget > 0 ? nextAmount >= effectiveTarget : true;
-    if (nextCompleted && !isCompleted) {
-      triggerConfetti();
-      onAchievement?.(activity.title);
+    try {
+      await onSaveLog(
+        activity.id,
+        dateStr,
+        nextAmount,
+        nextCompleted,
+        log?.details || {},
+        log?.note || null
+      );
+      setSaveError(null);
+      if (nextCompleted && !isCompleted) {
+        triggerConfetti();
+        onAchievement?.(activity.title);
+      }
+    } catch (error) {
+      console.error('Failed to save activity count:', error);
+      setSaveError('تعذر حفظ التقدم. تحقق من الاتصال والصلاحيات ثم حاول مرة أخرى.');
     }
-    await onSaveLog(
-      activity.id,
-      dateStr,
-      nextAmount,
-      nextCompleted,
-      log?.details || {},
-      log?.note || null
-    );
   };
 
   const handleResetLog = async (e) => {
     if (e) e.stopPropagation();
-    if (onResetLog) {
-      await onResetLog(activity.id, dateStr);
-    } else {
-      await onSaveLog(activity.id, dateStr, 0, false, {}, null);
+    try {
+      if (onResetLog) {
+        await onResetLog(activity.id, dateStr);
+      } else {
+        await onSaveLog(activity.id, dateStr, 0, false, {}, null);
+      }
+      setSaveError(null);
+      setModalOpen(false);
+    } catch (error) {
+      console.error('Failed to reset activity:', error);
+      setSaveError('تعذر حفظ التراجع عن الإنجاز. حاول مرة أخرى.');
     }
-    setModalOpen(false);
   };
 
   const progressPercent = isPrayers
@@ -140,27 +159,47 @@ export function ActivityCard({
   const handleSaveTarget = async (e) => {
     e.stopPropagation();
     const newT = Math.max(1, parseInt(targetInput, 10) || 1);
+    const previousLocalTarget = localTarget;
+    const previousTarget = effectiveTarget;
     setLocalTarget(newT);
-    setEditingTarget(false);
     try {
       await onUpdateTarget?.(activity.id, newT);
+      setEditingTarget(false);
+      setSaveError(null);
     } catch (err) {
       console.error('Failed to persist target', err);
+      setLocalTarget(previousLocalTarget);
+      setTargetInput(previousTarget);
+      setEditingTarget(true);
+      setSaveError('تعذر حفظ الهدف؛ أعد المحاولة.');
     }
   };
 
   const prayersDetails = log?.details?.prayers;
 
   const handleModalSave = async (amount, completed, details, note) => {
-    if (completed && !isCompleted) {
-      triggerConfetti();
-      onAchievement?.(activity.title);
+    try {
+      await onSaveLog(activity.id, dateStr, amount, completed, details, note);
+      setSaveError(null);
+      if (completed && !isCompleted) {
+        triggerConfetti();
+        onAchievement?.(activity.title);
+      }
+    } catch (error) {
+      console.error('Failed to save activity details:', error);
+      setSaveError('تعذر حفظ تفاصيل النشاط. تحقق من الاتصال وحاول مرة أخرى.');
+      throw error;
     }
-    await onSaveLog(activity.id, dateStr, amount, completed, details, note);
   };
 
   return (
     <>
+      {saveError && (
+        <div role="alert" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-6 z-[100] max-w-md rounded-2xl bg-rose-700 px-4 py-3 text-sm font-bold text-white shadow-xl">
+          {saveError}
+          <button type="button" onClick={() => setSaveError(null)} className="ms-3 underline">إغلاق</button>
+        </div>
+      )}
       <div
         onClick={() => setModalOpen(true)}
         className={`group relative bg-white dark:bg-slate-900 border rounded-3xl p-4 sm:p-5 transition-all duration-200 cursor-pointer hover:shadow-md ${

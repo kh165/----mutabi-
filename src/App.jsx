@@ -61,15 +61,6 @@ function MainApp() {
   const triggeredMapRef = useRef({});
   const refreshingPrayerTimesRef = useRef(null);
 
-  // نمنع المتصفح من إدارة موضع السكرول بنفسه (كان بيتعارض مع الاستعادة اليدوية)
-  useEffect(() => {
-    try {
-      if ('scrollRestoration' in window.history) {
-        window.history.scrollRestoration = 'manual';
-      }
-    } catch {}
-  }, []);
-
   // نتأكد إن الرابط (hash) دايمًا متطابق مع التبويب الحالي، بدون إضافة سجل جديد في التاريخ
   useEffect(() => {
     try {
@@ -78,80 +69,6 @@ function MainApp() {
       }
     } catch {}
   }, [currentTab]);
-
-  // حفظ واستعادة موضع السكرول لكل تبويب
-  useEffect(() => {
-    if (loading || !user?.uid) return undefined;
-
-    const key = `mutabi_scroll_${currentTab}`;
-    let ready = false; // لا نحفظ أي موضع قبل ما الاستعادة تخلص (عشان ما نكتب فوق الموضع القديم)
-    let cancelled = false;
-    let attempts = 0;
-    let timer = 0;
-
-    let target = 0;
-    try {
-      const saved = Number(localStorage.getItem(key));
-      if (Number.isFinite(saved) && saved > 0) target = saved;
-    } catch {}
-
-    const savePosition = () => {
-      if (!ready) return;
-      try {
-        localStorage.setItem(key, String(Math.round(window.scrollY)));
-      } catch {}
-    };
-
-    const finishRestore = () => {
-      ready = true;
-      window.clearTimeout(timer);
-    };
-
-    const tryRestore = () => {
-      if (cancelled || ready) return;
-      if (target <= 0) {
-        window.scrollTo(0, 0);
-        finishRestore();
-        return;
-      }
-      window.scrollTo(0, target);
-      attempts++;
-      // الصفحة بتتحمّل تدريجيًا (lazy + بيانات Firestore) فنكرر المحاولة لحد ما الطول يكفي
-      if (Math.abs(window.scrollY - target) < 4 || attempts >= 60) {
-        finishRestore();
-        return;
-      }
-      timer = window.setTimeout(tryRestore, 250);
-    };
-
-    // لو المستخدم لمس الشاشة أو سكرول بنفسه، نوقف الاستعادة فورًا
-    const onUserInteract = () => finishRestore();
-    const interactEvents = ['wheel', 'touchstart', 'mousedown', 'keydown'];
-    interactEvents.forEach((evt) =>
-      window.addEventListener(evt, onUserInteract, { passive: true, once: true })
-    );
-
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') savePosition();
-    };
-
-    const frame = window.requestAnimationFrame(tryRestore);
-    window.addEventListener('scroll', savePosition, { passive: true });
-    window.addEventListener('pagehide', savePosition);
-    window.addEventListener('beforeunload', savePosition);
-    document.addEventListener('visibilitychange', onVisibility);
-
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
-      interactEvents.forEach((evt) => window.removeEventListener(evt, onUserInteract));
-      window.removeEventListener('scroll', savePosition);
-      window.removeEventListener('pagehide', savePosition);
-      window.removeEventListener('beforeunload', savePosition);
-      document.removeEventListener('visibilitychange', onVisibility);
-    };
-  }, [currentTab, loading, user?.uid]);
 
   useEffect(() => {
     if (loading || !user?.uid || !userDoc) return;
@@ -234,10 +151,17 @@ function MainApp() {
   ]);
 
   const handleSelectTab = (tabId) => {
+    if (!VALID_TABS.includes(tabId)) return;
+    if (tabId !== currentTab) {
+      try {
+        window.history.pushState({ tabId }, '', `#${tabId}`);
+      } catch {}
+      // كل صفحة تبدأ من أعلى بشكل ثابت، دون استعادة موضع قديم بعد تحميل محتوى متأخر.
+      window.scrollTo(0, 0);
+    }
     setCurrentTabState(tabId);
     try {
       localStorage.setItem('mutabi_active_tab', tabId);
-      window.location.hash = tabId;
     } catch {}
   };
 
@@ -261,7 +185,11 @@ function MainApp() {
       }
     };
     window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('popstate', onHashChange);
+    };
   }, []);
 
   // Timer checking for prayer times and worship notifications every 20 seconds

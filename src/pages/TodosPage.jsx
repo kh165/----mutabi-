@@ -129,7 +129,11 @@ export function useTodos() {
         }));
 
         // Sort descending by creation date
-        cloudTodos.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        cloudTodos.sort((a, b) => {
+          const aData = /** @type {any} */ (a);
+          const bData = /** @type {any} */ (b);
+          return (bData.createdAt || '').localeCompare(aData.createdAt || '');
+        });
 
         const pendingTodos = getPendingTodoList(user.uid);
         // Keep the latest local edits visible while their Firestore write is pending.
@@ -178,7 +182,9 @@ export function useTodos() {
   // Dual-Write helper: Writes to both subcollection AND user document in Firestore
   const syncToFirestore = useCallback(
     async (nextTodos, specificTodoAction = null) => {
-      if (!user?.uid) return;
+      if (!user?.uid) {
+        return { success: false, pending: false, error: new Error('يجب تسجيل الدخول لمزامنة المهام.') };
+      }
 
       setSyncStatus('syncing');
 
@@ -200,7 +206,7 @@ export function useTodos() {
 
       if (!navigator.onLine) {
         queueTodoChange();
-        return;
+        return { success: false, pending: true };
       }
 
       // 1. Primary Cloud Persistence: Backup to user's root document (always permitted for user owner)
@@ -244,6 +250,7 @@ export function useTodos() {
         setSyncStatus('synced');
         setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         setErrorMessage(null);
+        return { success: true, pending: false };
       } else {
         queueTodoChange();
         setErrorMessage(
@@ -251,6 +258,7 @@ export function useTodos() {
             ? 'تم حفظ التغيير على هذا الجهاز، لكن تعذّر رفعه إلى السحابة. تحقّق من صلاحيات الحساب.'
             : null,
         );
+        return { success: false, pending: true, error: writeError };
       }
     },
     [user?.uid]
@@ -504,11 +512,34 @@ export function useTodos() {
     setTodos(activeList);
     setLocalTodos(user.uid, activeList);
 
+    const failedDeletes = [];
     for (const id of completedIds) {
-      await deleteDoc(doc(db, 'users', user.uid, 'todos', id)).catch(() => {});
+      try {
+        const result = await settleOrTimeout(
+          deleteDoc(doc(db, 'users', user.uid, 'todos', id)),
+          4000,
+        );
+        if (result === 'pending') failedDeletes.push(id);
+      } catch (error) {
+        console.warn('Failed to delete completed todo:', error);
+        failedDeletes.push(id);
+      }
     }
 
     await syncToFirestore(activeList);
+    if (failedDeletes.length) {
+      failedDeletes.forEach((todoId) => {
+        enqueueOfflineAction({
+          type: 'DELETE_TODO',
+          key: `TODO_${todoId}`,
+          uid: user.uid,
+          todoId,
+          todosList: activeList,
+        });
+      });
+      setSyncStatus('pending');
+      setErrorMessage('أُخفيت المهام المكتملة محليًا، لكن تعذّر تأكيد حذف بعضها من السحابة؛ ستُعاد محاولة المزامنة.');
+    }
   }, [user?.uid, todos, syncToFirestore]);
 
   // Manual verify & sync function to let user test live Firestore connection
@@ -517,9 +548,18 @@ export function useTodos() {
     setSyncStatus('syncing');
     try {
       // Test read user document
-      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      await getDoc(doc(db, 'users', user.uid));
       // Sync active list
-      await syncToFirestore(todos);
+      const result = await syncToFirestore(todos);
+      if (!result?.success) {
+        setSyncStatus(result?.pending ? 'pending' : 'error');
+        setErrorMessage(
+          result?.pending
+            ? 'تم وضع البيانات في طابور المزامنة، لكن لم يتم تأكيد وصولها إلى السحابة بعد.'
+            : result?.error?.message || 'تعذر تأكيد المزامنة السحابية.'
+        );
+        return false;
+      }
       setSyncStatus('synced');
       setLastSyncedTime(new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
       return true;

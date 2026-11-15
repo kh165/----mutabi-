@@ -442,8 +442,12 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     const userBeingLoggedOut = user;
     if (userBeingLoggedOut) {
-      // Revoke before clearing the identity so the token is deleted under its owner's path.
-      await revokeFcmToken(userBeingLoggedOut);
+      // Best-effort token cleanup; notification cleanup must not block signing out.
+      try {
+        await revokeFcmToken(userBeingLoggedOut);
+      } catch (error) {
+        console.warn('Could not revoke the notification token during sign out:', error);
+      }
     }
     stopUserDocListener();
     try {

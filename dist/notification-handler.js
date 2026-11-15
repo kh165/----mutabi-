@@ -52,20 +52,34 @@ self.addEventListener('message', (event) => {
 
 // التعامل مع النقر على الإشعار في شريط التنبيهات أو شاشة القفل
 self.addEventListener('notificationclick', (event) => {
+  // This handler is imported before Firebase Messaging; prevent its default
+  // notification-click handler from racing us to open another window.
+  event.stopImmediatePropagation();
   event.notification.close();
   const soundType = event.notification.data?.soundType || 'adhan';
   const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin).href;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      // إذا كان هناك تبويب مفتوح بالفعل، نركز عليه ونرسل أمر الصوت
-      for (const client of clientList) {
-        if (client.url === targetUrl && 'focus' in client) {
+      // Focus an existing app window and navigate it when the notification
+      // targets a different route, rather than opening a second app window.
+      const existing = clientList.find((client) => {
+        try {
+          return new URL(client.url).origin === self.location.origin && 'focus' in client;
+        } catch {
+          return false;
+        }
+      });
+      if (existing) {
+        const navigate = existing.url === targetUrl || typeof existing.navigate !== 'function'
+          ? Promise.resolve(existing)
+          : existing.navigate(targetUrl);
+        return navigate.then((client) => {
           client.postMessage({ type: 'NOTIFICATION_CLICKED', soundType });
           return client.focus();
-        }
+        });
       }
-      // إذا لم يكن مفتوحاً، نفتح نافذة جديدة
+      // No app window exists, so open the requested app route.
       if (self.clients.openWindow) {
         return self.clients.openWindow(targetUrl);
       }
